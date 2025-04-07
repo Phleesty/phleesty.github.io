@@ -2,21 +2,125 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Видео с синхронизированным чатом</title>
-  <link rel="stylesheet" href="styles.css">
+  <title>VK Видео с синхронизированным чатом</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #18181b;
+      color: #fff;
+    }
+    .container {
+      display: flex;
+      height: 100vh;
+    }
+    .video-container {
+      flex: 3;
+      padding: 10px;
+      background-color: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .chat-container {
+      flex: 1;
+      background-color: #0e0e10;
+      border-left: 1px solid #2f2f33;
+      padding: 10px;
+      overflow-y: auto;
+    }
+    .chat-message {
+      margin-bottom: 10px;
+      padding: 5px 8px;
+      background: #1f1f23;
+      border-radius: 4px;
+    }
+    .chat-message .user-name {
+      font-weight: bold;
+      margin-right: 4px;
+    }
+  </style>
+  <!-- Подключаем локально размещённый VK API -->
+  <script src="https://vk.com/js/api/openapi.js?168"></script>
 </head>
 <body>
   <div class="container">
+    <!-- Контейнер для видео -->
     <div class="video-container">
-      <div class="video-wrapper">
-        <iframe id="vk-video" src="https://vkvideo.ru/video_ext.php?oid=-181822274&id=456239068&hd=3&autoplay=1" allow="autoplay; encrypted-media; fullscreen; picture-in-picture; screen-wake-lock;" frameborder="0" allowfullscreen></iframe>
-      </div>
+      <!-- Вставляем VK видео через iframe.
+           Убедитесь, что URL корректный, а также, что доменное имя настроено (local.mysite.test) -->
+      <iframe id="vk-video" src="https://vkvideo.ru/video_ext.php?oid=-181822274&id=456239068&hd=3&autoplay=1" width="1280" height="720" allow="autoplay; encrypted-media; picture-in-picture; screen-wake-lock;" frameborder="0" allowfullscreen></iframe>
     </div>
-    <div class="chat-container">
-      <div class="chat-header">Чат</div>
-      <div id="chat" class="chat-box"></div>
+    <!-- Контейнер для чата -->
+    <div class="chat-container" id="chat">
+      <!-- Сообщения из comments.json будут добавляться сюда -->
     </div>
   </div>
-  <script src="script.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const chatBox = document.getElementById('chat');
+      const videoIframe = document.getElementById('vk-video');
+      let comments = [];
+      let displayedComments = new Set();
+
+      // Загрузка JSON с комментариями
+      fetch('comments.json')
+        .then(response => response.json())
+        .then(data => { comments = data.comments; })
+        .catch(error => console.error('Ошибка загрузки комментариев:', error));
+
+      // Функция для отображения комментария в чате
+      function displayComment(comment) {
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('chat-message');
+
+        const userNameElement = document.createElement('span');
+        userNameElement.classList.add('user-name');
+        userNameElement.textContent = comment.commenter.display_name + ': ';
+        userNameElement.style.color = comment.message.user_color || '#fff';
+
+        const messageBodyElement = document.createElement('span');
+        messageBodyElement.classList.add('message-body');
+        messageBodyElement.textContent = comment.message.body;
+
+        messageElement.appendChild(userNameElement);
+        messageElement.appendChild(messageBodyElement);
+        chatBox.appendChild(messageElement);
+
+        // Автоматическая прокрутка чата вниз
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
+
+      // Функция синхронизации комментариев с текущим временем видео
+      function syncComments(currentTime) {
+        comments.forEach(comment => {
+          const commentTime = comment.content_offset_seconds;
+          if (currentTime >= commentTime && !displayedComments.has(comment._id)) {
+            displayComment(comment);
+            displayedComments.add(comment._id);
+          }
+        });
+      }
+
+      // Функция для запроса текущего времени видео через postMessage
+      function requestCurrentTime() {
+        // Отправляем сообщение в iframe для запроса времени
+        videoIframe.contentWindow.postMessage({ type: 'getCurrentTime' }, '*');
+      }
+
+      // Обработчик сообщений от iframe
+      window.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'currentTime') {
+          const currentTime = event.data.time;
+          syncComments(currentTime);
+        }
+      });
+
+      // Периодически запрашиваем время видео каждые 500 мс
+      setInterval(requestCurrentTime, 500);
+    });
+  </script>
 </body>
 </html>
