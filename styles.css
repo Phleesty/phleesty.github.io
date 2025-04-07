@@ -1,0 +1,71 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #18181b;
+    color: #fff;
+  }
+  
+  .container {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+  }
+  
+  .video-container {
+    flex: 3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+  }
+  
+  .video-wrapper {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%; /* Соотношение 16:9 */
+  }
+  
+  .video-wrapper iframe {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: #0e0e10;
+    border-left: 1px solid #2f2f33;
+    overflow: hidden;
+  }
+  
+  .chat-header {
+    background-color: #1f1f23;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+  }
+  
+  .chat-box {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  
+  .chat-message {
+    margin-bottom: 10px;
+  }
+  
+  .chat-message .user-name {
+    font-weight: bold;
+  }
+  
+  .chat-message .message-body {
+    display: inline;
+  }
+  
