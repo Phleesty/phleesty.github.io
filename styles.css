@@ -150,4 +150,22 @@ body {
         margin-top: 20px;
         height: 50vh;
     }
-}
+    }
+    .chat-line__message-container {
+        display: flex;
+        align-items: baseline;
+    }
+
+    .ffz-badge {
+        width: 18px;
+        height: 18px;
+        margin-right: 3px;
+    }
+
+    .chat-author__display-name {
+        font-weight: 600;
+    }
+
+    .text-fragment {
+        word-break: break-word;
+    }

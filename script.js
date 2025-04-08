@@ -1,293 +1,145 @@
-document.addEventListener('DOMContentLoaded', async function() {
-    // Загрузка данных чата из JSON файла
-    let chatData;
+document.addEventListener('DOMContentLoaded', async () => {
+    const MAX_MESSAGES = 100;
+    const TIME_WINDOW = 30;
+    let player = null;
+    let chatData = null;
+    let currentMessages = [];
+    let lastUpdateTime = -1;
+
+    // Загрузка данных чата
     try {
-        const response = await fetch('2418600027.json');
-        if (!response.ok) {
-            throw new Error('Не удалось загрузить файл чата.');
-        }
+        const response = await fetch('2421184938.json');
+        if (!response.ok) throw new Error('Ошибка загрузки чата');
         chatData = await response.json();
-        console.log("Чат загружен успешно");
+        chatData.comments.sort((a, b) => a.content_offset_seconds - b.content_offset_seconds);
     } catch (error) {
-        console.error("Ошибка загрузки чата:", error);
-        document.getElementById('chat-messages').innerHTML = '<p class="error">Ошибка загрузки чата</p>';
+        console.error('Ошибка чата:', error);
+        document.getElementById('chat-messages').innerHTML = '<div class="error">Ошибка загрузки чата</div>';
         return;
     }
 
-    // Карта эмотиконов для быстрого доступа
-    const emoticons = {};
-    
-    // Если в JSON-файле есть эмотиконы, обрабатываем их
-    if (chatData.emotes) {
-        chatData.emotes.forEach(emote => {
-            emoticons[emote.id] = emote;
-        });
-    }
-    
-    // Карта бейджей для быстрого доступа
-    const badges = {};
-    
-    // Если в JSON есть бейджи, обрабатываем их
-    if (chatData.badges) {
-        chatData.badges.forEach(badge => {
-            if (!badges[badge._id]) {
-                badges[badge._id] = {};
-            }
-            badges[badge._id][badge.version] = badge;
-        });
-    }
-    
-    // Сортируем сообщения по времени
-    const sortedComments = chatData.comments.sort((a, b) => 
-        a.content_offset_seconds - b.content_offset_seconds
-    );
-    
-    // Функция для форматирования времени в формат ЧЧ:ММ:СС
-    function formatTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
-    }
-    
-    // Функция для обработки сообщения чата
-    function processMessage(comment) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'chat-message';
-        messageDiv.dataset.time = comment.content_offset_seconds;
-        
-        // Добавляем временную метку
-        const timestamp = document.createElement('span');
-        timestamp.className = 'timestamp';
-        timestamp.textContent = formatTime(comment.content_offset_seconds);
-        messageDiv.appendChild(timestamp);
-        
-        // Добавляем бейджи пользователя
-        if (comment.message.user_badges && comment.message.user_badges.length > 0) {
-            comment.message.user_badges.forEach(badge => {
-                const badgeImg = document.createElement('img');
-                badgeImg.className = 'badge';
-                // Пытаемся найти бейдж среди известных
-                if (badges[badge._id] && badges[badge._id][badge.version]) {
-                    badgeImg.src = badges[badge._id][badge.version].image_url_1x;
-                    badgeImg.alt = badge._id;
-                    badgeImg.title = badge._id;
-                    badgeImg.width = 18;
-                    badgeImg.height = 18;
-                    messageDiv.appendChild(badgeImg);
-                }
-            });
-        }
-        
-        // Добавляем имя пользователя с цветом
-        const username = document.createElement('span');
-        username.className = 'username';
-        username.textContent = comment.commenter.display_name;
-        if (comment.message.user_color) {
-            username.style.color = comment.message.user_color;
-        }
-        messageDiv.appendChild(username);
-        
-        // Добавляем двоеточие после имени
-        const colon = document.createElement('span');
-        colon.textContent = ': ';
-        messageDiv.appendChild(colon);
-        
-        // Добавляем текст сообщения
-        const messageContent = document.createElement('span');
-        messageContent.className = 'message-content';
-        
-        // Обрабатываем фрагменты сообщения (текст и эмоциконы)
-        if (comment.message.fragments) {
-            comment.message.fragments.forEach(fragment => {
-                if (fragment.emoticon) {
-                    // Это эмоцикон
-                    const emote = document.createElement('img');
-                    emote.className = 'emote';
-                    
-                    // Проверяем, есть ли эмоцикон в нашей карте или ищем в основном объекте
-                    const emoteId = fragment.emoticon.emoticon_id;
-                    if (emoticons[emoteId]) {
-                        emote.src = emoticons[emoteId].url || `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
-                    } else {
-                        // Если не нашли в карте, используем стандартный URL Twitch для эмоциконов
-                        emote.src = `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
-                    }
-                    
-                    emote.alt = fragment.text;
-                    emote.title = fragment.text;
-                    messageContent.appendChild(emote);
-                } else {
-                    // Обычный текст
-                    messageContent.appendChild(document.createTextNode(fragment.text));
-                }
-            });
-        } else {
-            // Если фрагментов нет, просто добавляем текст сообщения
-            messageContent.textContent = comment.message.body;
-        }
-        
-        messageDiv.appendChild(messageContent);
-        return messageDiv;
-    }
-    
-    let currentVideoTime = 0;
-    let lastShownMessageTime = -1;
-    let syncEnabled = true;
-    
-    // Функция для отображения сообщений до определенного времени
-    function showMessagesUpToTime(timeInSeconds) {
-        // Если синхронизация отключена, ничего не делаем
-        if (!syncEnabled) return;
-        
-        // Если время не изменилось, ничего не делаем
-        if (timeInSeconds === lastShownMessageTime) return;
-        
-        const chatMessages = document.getElementById('chat-messages');
-        
-        // Очищаем чат, если перемотали назад
-        if (timeInSeconds < lastShownMessageTime) {
-            chatMessages.innerHTML = '';
-            lastShownMessageTime = -1;
-        }
-        
-        // Показываем сообщения до текущего времени видео
-        sortedComments.forEach(comment => {
-            const messageTime = comment.content_offset_seconds;
-            
-            // Если сообщение должно быть показано и оно еще не было показано
-            if (messageTime <= timeInSeconds && messageTime > lastShownMessageTime) {
-                const messageDiv = processMessage(comment);
-                chatMessages.appendChild(messageDiv);
-                
-                // Прокручиваем чат вниз при добавлении новых сообщений
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-        });
-        
-        lastShownMessageTime = timeInSeconds;
-    }
-    
-    // Инициализация VideoPlayer API ВКонтакте
-    let player;
-    let playerInitialized = false;
-    
-    function initVideoPlayer() {
+    // Инициализация плеера
+    const initPlayer = () => {
         try {
-            // Получаем iframe
-            const iframe = document.getElementById('vk-player');
+            player = VK.VideoPlayer(document.getElementById('vk-player'));
+            player.on(VK.VideoPlayer.Events.TIMEUPDATE, updateChat);
+            player.on(VK.VideoPlayer.Events.ERROR, () => startFallback());
+            console.log('VK плеер инициализирован');
+        } catch (error) {
+            console.warn('Ошибка VK плеера, используется fallback');
+            startFallback();
+        }
+    };
+
+    // Fallback таймер
+    const startFallback = () => {
+        let fakeTime = 0;
+        setInterval(() => {
+            fakeTime += 0.5;
+            updateChat({ time: fakeTime });
+        }, 500);
+    };
+
+    // Основная функция обновления чата
+    const updateChat = ({ time }) => {
+        if (Math.abs(time - lastUpdateTime) < 0.5) return;
+        lastUpdateTime = time;
+
+        const startTime = Math.max(0, time - TIME_WINDOW);
+        const endTime = time + TIME_WINDOW;
+        
+        // Бинарный поиск для оптимизации
+        const findIndex = (target) => {
+            let low = 0, high = chatData.comments.length;
+            while (low < high) {
+                const mid = (low + high) >>> 1;
+                if (chatData.comments[mid].content_offset_seconds < target) low = mid + 1;
+                else high = mid;
+            }
+            return low;
+        };
+
+        const startIdx = findIndex(startTime);
+        const endIdx = findIndex(endTime);
+        const newMessages = chatData.comments.slice(startIdx, endIdx).slice(-MAX_MESSAGES);
+
+        if (JSON.stringify(newMessages) === JSON.stringify(currentMessages)) return;
+        currentMessages = newMessages;
+
+        renderMessages(newMessages);
+    };
+
+    // Рендер сообщений
+    const renderMessages = (messages) => {
+        const fragment = document.createDocumentFragment();
+        const chatContainer = document.getElementById('chat-messages');
+        
+        messages.forEach(comment => {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.dataset.time = comment.content_offset_seconds;
             
-            // Создаем экземпляр видеоплеера
-            player = VK.VideoPlayer(iframe);
-            
-            // Подписываемся на события плеера
-            player.on(VK.VideoPlayer.Events.INITED, function(state) {
-                console.log('Плеер инициализирован', state);
-                playerInitialized = true;
-                
-                // Получаем начальное состояние плеера
-                updateTime();
-            });
-            
-            // Обновление времени для синхронизации чата
-            player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                if (syncEnabled) {
-                    currentVideoTime = state.time;
-                    showMessagesUpToTime(currentVideoTime);
+            // Бейджи
+            const badgesDiv = document.createElement('div');
+            badgesDiv.className = 'chat-badges';
+            if (comment.message.user_badges) {
+                comment.message.user_badges.forEach(badge => {
+                    const badgeData = chatData.badges?.find(b => b.name === badge._id);
+                    if (badgeData?.versions?.[badge.version]) {
+                        const img = document.createElement('img');
+                        img.src = badgeData.versions[badge.version].image_url_1x;
+                        img.className = 'chat-badge';
+                        badgesDiv.appendChild(img);
+                    }
+                });
+            }
+
+            // Имя пользователя
+            const userSpan = document.createElement('span');
+            userSpan.className = 'chat-user';
+            userSpan.style.color = comment.message.user_color || '#fff';
+            userSpan.textContent = comment.commenter.display_name;
+
+            // Контент сообщения
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'chat-content';
+            comment.message.fragments?.forEach(fragment => {
+                if (fragment.emoticon) {
+                    const emoteData = chatData.emotes?.find(e => e.id === fragment.emoticon.emoticon_id);
+                    if (emoteData) {
+                        const img = document.createElement('img');
+                        img.src = emoteData.data ? `data:image/png;base64,${emoteData.data}` : emoteData.url;
+                        img.className = 'chat-emote';
+                        contentDiv.appendChild(img);
+                    }
+                } else {
+                    contentDiv.appendChild(document.createTextNode(fragment.text));
                 }
             });
-            
-            // Сообщаем пользователю, что воспроизведение началось
-            player.on(VK.VideoPlayer.Events.STARTED, function(state) {
-                console.log('Воспроизведение началось', state);
-            });
-            
-            // Сообщаем пользователю, что воспроизведение приостановлено
-            player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
-                console.log('Воспроизведение приостановлено', state);
-            });
-            
-            // Сообщаем пользователю, что воспроизведение возобновлено
-            player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
-                console.log('Воспроизведение возобновлено', state);
-            });
-            
-            // Сообщаем пользователю об ошибке
-            player.on(VK.VideoPlayer.Events.ERROR, function(state) {
-                console.error('Ошибка воспроизведения', state);
-            });
-            
-        } catch (error) {
-            console.error('Ошибка инициализации плеера:', error);
-            
-            // Как резервный вариант, начинаем обновлять время вручную
-            startFallbackTimeTracking();
-        }
-    }
-    
-    // Функция обновления времени (используется как для инициализации, так и для обновления)
-    function updateTime() {
-        if (playerInitialized) {
-            try {
-                currentVideoTime = player.getCurrentTime();
-                showMessagesUpToTime(currentVideoTime);
-            } catch (error) {
-                console.error('Ошибка при получении текущего времени:', error);
-            }
-        }
-    }
-    
-    // Резервный метод отслеживания времени, если API VK не работает
-    function startFallbackTimeTracking() {
-        console.log('Запуск резервного отслеживания времени');
-        setInterval(function() {
-            currentVideoTime += 1;
-            showMessagesUpToTime(currentVideoTime);
-        }, 1000);
-    }
-    
-    // Функция для перемотки видео на указанное время
-    function seekToTime(seconds) {
-        if (playerInitialized) {
-            try {
-                player.seek(seconds);
-                // Сбрасываем состояние чата для обновления
-                currentVideoTime = seconds;
-                lastShownMessageTime = seconds - 1;
-                
-                // Очищаем и обновляем чат
-                const chatMessages = document.getElementById('chat-messages');
-                chatMessages.innerHTML = '';
-                showMessagesUpToTime(currentVideoTime);
-            } catch (error) {
-                console.error('Ошибка при перемотке видео:', error);
-            }
-        }
-    }
-    
-    // Инициализируем плеер
-    initVideoPlayer();
-    
-    // Добавляем обработчик клика по сообщениям для перемотки видео
-    document.getElementById('chat-messages').addEventListener('click', function(event) {
-        const chatMessage = event.target.closest('.chat-message');
-        if (chatMessage && chatMessage.dataset.time) {
-            const timeToSeek = parseFloat(chatMessage.dataset.time);
-            seekToTime(timeToSeek);
+
+            // Сборка элементов
+            messageDiv.append(badgesDiv, userSpan, contentDiv);
+            fragment.appendChild(messageDiv);
+        });
+
+        chatContainer.innerHTML = '';
+        chatContainer.appendChild(fragment);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
+    // Обработчик клика для перемотки
+    document.getElementById('chat-messages').addEventListener('click', (e) => {
+        const messageDiv = e.target.closest('.chat-message');
+        if (messageDiv && player) {
+            player.seek(parseFloat(messageDiv.dataset.time));
         }
     });
-    
-    // Добавляем обработчик для кнопки синхронизации
-    document.getElementById('sync-chat').addEventListener('click', function() {
-        syncEnabled = !syncEnabled;
-        
-        // Меняем текст кнопки в зависимости от состояния
-        this.textContent = syncEnabled ? "Синхронизировать" : "Автосинхронизация выкл.";
-        this.style.backgroundColor = syncEnabled ? "#9147ff" : "#f40";
-        
-        if (syncEnabled) {
-            // Если синхронизация включена, получаем текущее время и обновляем чат
-            updateTime();
-        }
-    });
+
+    // Инициализация
+    if (typeof VK !== 'undefined') {
+        initPlayer();
+    } else {
+        console.warn('VK API не загружен, используется fallback');
+        startFallback();
+    }
 });
