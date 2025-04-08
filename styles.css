@@ -1,71 +1,122 @@
-body {
-    font-family: Arial, sans-serif;
+* {
     margin: 0;
     padding: 0;
-    background-color: #18181b;
-    color: #fff;
-  }
-  
-  .container {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background-color: #0e0e10;
+    color: #efeff1;
+}
+
+.container {
     display: flex;
-    flex-direction: row;
-    height: 100vh;
-  }
-  
-  .video-container {
-    flex: 3;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 10px;
-  }
-  
-  .video-wrapper {
-    position: relative;
     width: 100%;
-    padding-bottom: 56.25%; /* Соотношение 16:9 */
-  }
-  
-  .video-wrapper iframe {
-    position: absolute;
+    height: 100vh;
+    padding: 20px;
+}
+
+.video-container {
+    flex: 7;
+    position: relative;
+    height: 100%;
+}
+
+#vk-player {
     width: 100%;
     height: 100%;
-  }
-  
-  .chat-container {
-    flex: 1;
+}
+
+.chat-container {
+    flex: 3;
+    background-color: #18181b;
+    border-radius: 4px;
     display: flex;
     flex-direction: column;
-    background-color: #0e0e10;
-    border-left: 1px solid #2f2f33;
+    margin-left: 20px;
+    height: 100%;
     overflow: hidden;
-  }
-  
-  .chat-header {
+}
+
+.chat-header {
+    padding: 10px 15px;
     background-color: #1f1f23;
-    padding: 10px;
-    text-align: center;
-    font-weight: bold;
-  }
-  
-  .chat-box {
+    border-bottom: 1px solid #2d2d32;
+}
+
+#chat-messages {
     flex: 1;
-    padding: 10px;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-  }
-  
-  .chat-message {
-    margin-bottom: 10px;
-  }
-  
-  .chat-message .user-name {
+    padding: 10px;
+}
+
+.chat-message {
+    margin-bottom: 8px;
+    padding: 4px 0;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+.chat-message .timestamp {
+    color: #737579;
+    font-size: 12px;
+    margin-right: 5px;
+}
+
+.chat-message .username {
     font-weight: bold;
-  }
-  
-  .chat-message .message-body {
-    display: inline;
-  }
-  
+    margin-right: 5px;
+}
+
+.chat-message .message-content {
+    color: #dedee3;
+}
+
+.chat-message .badge {
+    display: inline-block;
+    margin-right: 3px;
+    vertical-align: middle;
+}
+
+.chat-message .emote {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Кастомный скроллбар для чата */
+#chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+    background: #18181b;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+    background: #4b4b51;
+    border-radius: 3px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #5b5b60;
+}
+
+/* Адаптивный дизайн */
+@media (max-width: 1024px) {
+    .container {
+        flex-direction: column;
+        height: auto;
+    }
+    
+    .video-container {
+        height: 56.25vw; /* 16:9 соотношение сторон */
+        max-height: 70vh;
+    }
+    
+    .chat-container {
+        margin-left: 0;
+        margin-top: 20px;
+        height: 50vh;
+    }
+}
