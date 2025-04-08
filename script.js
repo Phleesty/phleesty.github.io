@@ -1,9 +1,4 @@
 document.addEventListener('DOMContentLoaded', async function() {
-    // Конфигурация видео ВК
-    // Указываем ID владельца и ID видео из вашей iframe-ссылки
-    const owner_id = -181822274;
-    const video_id = 456239297;
-    
     // Загрузка данных чата из JSON файла
     let chatData;
     try {
@@ -72,7 +67,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             comment.message.user_badges.forEach(badge => {
                 const badgeImg = document.createElement('img');
                 badgeImg.className = 'badge';
-                // Проверяем, есть ли бейдж в нашей карте
+                // Пытаемся найти бейдж среди известных
                 if (badges[badge._id] && badges[badge._id][badge.version]) {
                     badgeImg.src = badges[badge._id][badge.version].image_url_1x;
                     badgeImg.alt = badge._id;
@@ -92,6 +87,11 @@ document.addEventListener('DOMContentLoaded', async function() {
             username.style.color = comment.message.user_color;
         }
         messageDiv.appendChild(username);
+        
+        // Добавляем двоеточие после имени
+        const colon = document.createElement('span');
+        colon.textContent = ': ';
+        messageDiv.appendChild(colon);
         
         // Добавляем текст сообщения
         const messageContent = document.createElement('span');
@@ -131,13 +131,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         return messageDiv;
     }
     
-    // Инициализация плеера ВК
-    let player;
     let currentVideoTime = 0;
     let lastShownMessageTime = -1;
+    let syncEnabled = true;
     
     // Функция для отображения сообщений до определенного времени
     function showMessagesUpToTime(timeInSeconds) {
+        // Если синхронизация отключена, ничего не делаем
+        if (!syncEnabled) return;
+        
         // Если время не изменилось, ничего не делаем
         if (timeInSeconds === lastShownMessageTime) return;
         
@@ -166,42 +168,126 @@ document.addEventListener('DOMContentLoaded', async function() {
         lastShownMessageTime = timeInSeconds;
     }
     
-    // Инициализация VK API
-    VK.init({
-        apiId: 53407736 // Здесь нужно указать ваш API ID, который можно получить в настройках приложения VK
-    });
+    // Инициализация VideoPlayer API ВКонтакте
+    let player;
+    let playerInitialized = false;
     
-    // Функция для инициализации видеоплеера ВК
-    function initPlayer() {
-        player = VK.Widgets.Video('vk-player', {
-            width: '100%',
-            height: '100%'
-        }, `${owner_id}_${video_id}`);
-        
-        // Для мониторинга текущего времени видео используем setInterval
-        // поскольку VK API не предоставляет полноценных колбэков для отслеживания времени
-        const videoTimeTracker = setInterval(function() {
-            // Если мы смогли получить плеер VK
-            if (document.querySelector('iframe#vk-player_iframe')) {
-                const iframe = document.querySelector('iframe#vk-player_iframe');
+    function initVideoPlayer() {
+        try {
+            // Получаем iframe
+            const iframe = document.getElementById('vk-player');
+            
+            // Создаем экземпляр видеоплеера
+            player = VK.VideoPlayer(iframe);
+            
+            // Подписываемся на события плеера
+            player.on(VK.VideoPlayer.Events.INITED, function(state) {
+                console.log('Плеер инициализирован', state);
+                playerInitialized = true;
                 
-                // Отправляем сообщение плееру VK для получения текущего времени
-                iframe.contentWindow.postMessage({
-                    method: 'getCurrentTime'
-                }, '*');
-            }
-        }, 1000); // Проверяем каждую секунду
-        
-        // Слушаем сообщения от iframe для получения текущего времени видео
-        window.addEventListener('message', function(event) {
-            // Проверяем, что сообщение от плеера VK и содержит время
-            if (event.data && typeof event.data === 'object' && event.data.event === 'getCurrentTime') {
-                currentVideoTime = event.data.time;
-                showMessagesUpToTime(currentVideoTime);
-            }
-        });
+                // Получаем начальное состояние плеера
+                updateTime();
+            });
+            
+            // Обновление времени для синхронизации чата
+            player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
+                if (syncEnabled) {
+                    currentVideoTime = state.time;
+                    showMessagesUpToTime(currentVideoTime);
+                }
+            });
+            
+            // Сообщаем пользователю, что воспроизведение началось
+            player.on(VK.VideoPlayer.Events.STARTED, function(state) {
+                console.log('Воспроизведение началось', state);
+            });
+            
+            // Сообщаем пользователю, что воспроизведение приостановлено
+            player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
+                console.log('Воспроизведение приостановлено', state);
+            });
+            
+            // Сообщаем пользователю, что воспроизведение возобновлено
+            player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
+                console.log('Воспроизведение возобновлено', state);
+            });
+            
+            // Сообщаем пользователю об ошибке
+            player.on(VK.VideoPlayer.Events.ERROR, function(state) {
+                console.error('Ошибка воспроизведения', state);
+            });
+            
+        } catch (error) {
+            console.error('Ошибка инициализации плеера:', error);
+            
+            // Как резервный вариант, начинаем обновлять время вручную
+            startFallbackTimeTracking();
+        }
     }
     
-    // Инициализируем плеер после загрузки VK API
-    initPlayer();
+    // Функция обновления времени (используется как для инициализации, так и для обновления)
+    function updateTime() {
+        if (playerInitialized) {
+            try {
+                currentVideoTime = player.getCurrentTime();
+                showMessagesUpToTime(currentVideoTime);
+            } catch (error) {
+                console.error('Ошибка при получении текущего времени:', error);
+            }
+        }
+    }
+    
+    // Резервный метод отслеживания времени, если API VK не работает
+    function startFallbackTimeTracking() {
+        console.log('Запуск резервного отслеживания времени');
+        setInterval(function() {
+            currentVideoTime += 1;
+            showMessagesUpToTime(currentVideoTime);
+        }, 1000);
+    }
+    
+    // Функция для перемотки видео на указанное время
+    function seekToTime(seconds) {
+        if (playerInitialized) {
+            try {
+                player.seek(seconds);
+                // Сбрасываем состояние чата для обновления
+                currentVideoTime = seconds;
+                lastShownMessageTime = seconds - 1;
+                
+                // Очищаем и обновляем чат
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.innerHTML = '';
+                showMessagesUpToTime(currentVideoTime);
+            } catch (error) {
+                console.error('Ошибка при перемотке видео:', error);
+            }
+        }
+    }
+    
+    // Инициализируем плеер
+    initVideoPlayer();
+    
+    // Добавляем обработчик клика по сообщениям для перемотки видео
+    document.getElementById('chat-messages').addEventListener('click', function(event) {
+        const chatMessage = event.target.closest('.chat-message');
+        if (chatMessage && chatMessage.dataset.time) {
+            const timeToSeek = parseFloat(chatMessage.dataset.time);
+            seekToTime(timeToSeek);
+        }
+    });
+    
+    // Добавляем обработчик для кнопки синхронизации
+    document.getElementById('sync-chat').addEventListener('click', function() {
+        syncEnabled = !syncEnabled;
+        
+        // Меняем текст кнопки в зависимости от состояния
+        this.textContent = syncEnabled ? "Синхронизировать" : "Автосинхронизация выкл.";
+        this.style.backgroundColor = syncEnabled ? "#9147ff" : "#f40";
+        
+        if (syncEnabled) {
+            // Если синхронизация включена, получаем текущее время и обновляем чат
+            updateTime();
+        }
+    });
 });
