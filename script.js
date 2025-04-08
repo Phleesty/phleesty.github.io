@@ -1,65 +1,97 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const chatBox = document.getElementById('chat');
-    const videoIframe = document.getElementById('vk-video');
-    let comments = [];
-    let displayedComments = new Set();
-  
-    // Загрузка JSON с комментариями
-    fetch('comments.json')
-      .then(response => response.json())
-      .then(data => {
-        comments = data.comments;
-      })
-      .catch(error => console.error('Ошибка загрузки комментариев:', error));
-  
-    // Функция для отображения комментариев
-    function displayComment(comment) {
-      const messageElement = document.createElement('div');
-      messageElement.classList.add('chat-message');
-  
-      const userNameElement = document.createElement('span');
-      userNameElement.classList.add('user-name');
-      userNameElement.textContent = comment.commenter.display_name + ': ';
-      userNameElement.style.color = comment.message.user_color || '#fff';
-  
-      const messageBodyElement = document.createElement('span');
-      messageBodyElement.classList.add('message-body');
-      messageBodyElement.textContent = comment.message.body;
-  
-      messageElement.appendChild(userNameElement);
-      messageElement.appendChild(messageBodyElement);
-      chatBox.appendChild(messageElement);
-  
-      // Прокрутка чата вниз
-      chatBox.scrollTop = chatBox.scrollHeight;
+let currentTime = 0; // Текущее время в секундах
+let lastIndex = 0;   // Индекс последнего отображенного сообщения
+let timerId = null;  // ID таймера
+let isPaused = false; // Флаг паузы
+let emoteMap = {};   // Карта эмоутов: ID -> data URL
+let badgeSets = {};  // Карта бейджей: ID -> данные
+
+// Загрузка JSON
+fetch('2418600027.json')
+    .then(response => response.json())
+    .then(data => {
+        const comments = data.comments;
+        const emotes = data.emotes || [];
+
+        // Создаем карту эмоутов
+        emotes.forEach(emote => {
+            emoteMap[emote.id] = `data:image/png;base64,${emote.data}`;
+        });
+
+        const channelId = data.streamer.id; // ID канала из JSON
+
+        // Загружаем бейджи с Twitch API
+        Promise.all([
+            fetch('https://badges.twitch.tv/v1/badges/global/display').then(res => res.json()),
+            fetch(`https://badges.twitch.tv/v1/badges/channels/${channelId}/display`).then(res => res.json())
+        ]).then(([globalBadges, channelBadges]) => {
+            badgeSets = { ...globalBadges.badge_sets, ...channelBadges.badge_sets };
+
+            // Обработчики кнопок
+            document.getElementById('start').addEventListener('click', () => {
+                if (!timerId) {
+                    timerId = setInterval(() => {
+                        if (!isPaused) {
+                            currentTime += 1;
+                            displayNewMessages(comments);
+                        }
+                    }, 1000); // Обновление каждую секунду
+                }
+            });
+
+            document.getElementById('pause').addEventListener('click', () => {
+                isPaused = true;
+            });
+
+            document.getElementById('resume').addEventListener('click', () => {
+                isPaused = false;
+            });
+        });
+    })
+    .catch(error => console.error('Ошибка загрузки:', error));
+
+// Отображение новых сообщений
+function displayNewMessages(comments) {
+    const chatDiv = document.getElementById('chat');
+    while (lastIndex < comments.length && comments[lastIndex].content_offset_seconds <= currentTime) {
+        const comment = comments[lastIndex];
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+
+        // Бейджи
+        comment.message.user_badges.forEach(badge => {
+            if (badgeSets[badge._id] && badgeSets[badge._id].versions[badge.version]) {
+                const badgeImg = document.createElement('img');
+                badgeImg.src = badgeSets[badge._id].versions[badge.version].image_url_1x;
+                badgeImg.alt = badge._id;
+                badgeImg.style.height = '18px'; // Размер как в Twitch
+                messageDiv.appendChild(badgeImg);
+            }
+        });
+
+        // Ник с цветом
+        const usernameSpan = document.createElement('span');
+        usernameSpan.className = 'username';
+        usernameSpan.style.color = comment.message.user_color || '#ffffff'; // Белый по умолчанию
+        usernameSpan.textContent = comment.commenter.display_name + ': ';
+        messageDiv.appendChild(usernameSpan);
+
+        // Текст сообщения с эмоутами
+        comment.message.fragments.forEach(fragment => {
+            if (fragment.emoticon && emoteMap[fragment.emoticon.emoticon_id]) {
+                const emoteImg = document.createElement('img');
+                emoteImg.src = emoteMap[fragment.emoticon.emoticon_id];
+                emoteImg.alt = fragment.text;
+                emoteImg.style.height = '24px'; // Размер эмоутов как в Twitch
+                messageDiv.appendChild(emoteImg);
+            } else {
+                const textSpan = document.createElement('span');
+                textSpan.textContent = fragment.text;
+                messageDiv.appendChild(textSpan);
+            }
+        });
+
+        chatDiv.appendChild(messageDiv);
+        chatDiv.scrollTop = chatDiv.scrollHeight; // Прокрутка вниз
+        lastIndex++;
     }
-  
-    // Функция для синхронизации комментариев с видео
-    function syncComments(currentTime) {
-      comments.forEach(comment => {
-        const commentTime = comment.content_offset_seconds;
-        if (currentTime >= commentTime && !displayedComments.has(comment._id)) {
-          displayComment(comment);
-          displayedComments.add(comment._id);
-        }
-      });
-    }
-  
-    // Функция для получения текущего времени видео
-    function getCurrentVideoTime() {
-      // Используем postMessage для запроса текущего времени у iframe
-      videoIframe.contentWindow.postMessage({ type: 'getCurrentTime' }, '*');
-    }
-  
-    // Обработчик сообщений от iframe
-    window.addEventListener('message', (event) => {
-      if (event.data.type === 'currentTime') {
-        const currentTime = event.data.time;
-        syncComments(currentTime);
-      }
-    });
-  
-    // Запрос текущего времени видео каждые 500 мс
-    setInterval(getCurrentVideoTime, 500);
-  });
-  
+}
