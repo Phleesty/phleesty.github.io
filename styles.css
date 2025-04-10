@@ -41,11 +41,12 @@ body {
 
 .chat-header {
     padding: 10px 15px;
+    font-size: small;
     background-color: #1f1f23;
     border-bottom: 1px solid #2d2d32;
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: center;
 }
 
 .playback-controls {
