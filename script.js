@@ -1,145 +1,227 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    const MAX_MESSAGES = 100;
-    const TIME_WINDOW = 30;
-    let player = null;
-    let chatData = null;
-    let currentMessages = [];
-    let lastUpdateTime = -1;
-
-    // Загрузка данных чата
+document.addEventListener('DOMContentLoaded', async function() {
+    // Загрузка данных чата из JSON файла
+    let chatData;
     try {
         const response = await fetch('2421184938.json');
-        if (!response.ok) throw new Error('Ошибка загрузки чата');
+        if (!response.ok) {
+            throw new Error('Не удалось загрузить файл чата.');
+        }
         chatData = await response.json();
-        chatData.comments.sort((a, b) => a.content_offset_seconds - b.content_offset_seconds);
+        console.log("Чат загружен успешно");
     } catch (error) {
-        console.error('Ошибка чата:', error);
-        document.getElementById('chat-messages').innerHTML = '<div class="error">Ошибка загрузки чата</div>';
+        console.error("Ошибка загрузки чата:", error);
+        document.getElementById('chat-messages').innerHTML = '<p class="error">Ошибка загрузки чата</p>';
         return;
     }
 
-    // Инициализация плеера
-    const initPlayer = () => {
-        try {
-            player = VK.VideoPlayer(document.getElementById('vk-player'));
-            player.on(VK.VideoPlayer.Events.TIMEUPDATE, updateChat);
-            player.on(VK.VideoPlayer.Events.ERROR, () => startFallback());
-            console.log('VK плеер инициализирован');
-        } catch (error) {
-            console.warn('Ошибка VK плеера, используется fallback');
-            startFallback();
+    // Карта эмотиконов для быстрого доступа
+    const emoticons = {};
+    if (chatData.emotes) {
+        chatData.emotes.forEach(emote => {
+            emoticons[emote.id] = emote;
+        });
+    }
+
+    // Карта бейджей для быстрого доступа
+    const badges = {};
+    if (chatData.badges) {
+        chatData.badges.forEach(badge => {
+            if (!badges[badge._id]) {
+                badges[badge._id] = {};
+            }
+            badges[badge._id][badge.version] = badge;
+        });
+    }
+
+    // Сортируем сообщения по времени
+    const sortedComments = chatData.comments.sort((a, b) => 
+        a.content_offset_seconds - b.content_offset_seconds
+    );
+
+    // Функция для форматирования времени в формат ЧЧ:ММ:СС
+    function formatTime(seconds) {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    }
+
+    // Функция для обработки сообщения чата
+    function processMessage(comment) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'chat-message';
+        messageDiv.dataset.time = comment.content_offset_seconds;
+
+        const timestamp = document.createElement('span');
+        timestamp.className = 'timestamp';
+        timestamp.textContent = formatTime(comment.content_offset_seconds);
+        messageDiv.appendChild(timestamp);
+
+        if (comment.message.user_badges && comment.message.user_badges.length > 0) {
+            comment.message.user_badges.forEach(badge => {
+                const badgeImg = document.createElement('img');
+                badgeImg.className = 'badge';
+                if (badges[badge._id] && badges[badge._id][badge.version]) {
+                    badgeImg.src = badges[badge._id][badge.version].image_url_1x;
+                    badgeImg.alt = badge._id;
+                    badgeImg.title = badge._id;
+                    badgeImg.width = 18;
+                    badgeImg.height = 18;
+                    messageDiv.appendChild(badgeImg);
+                }
+            });
         }
-    };
 
-    // Fallback таймер
-    const startFallback = () => {
-        let fakeTime = 0;
-        setInterval(() => {
-            fakeTime += 0.5;
-            updateChat({ time: fakeTime });
-        }, 500);
-    };
+        const username = document.createElement('span');
+        username.className = 'username';
+        username.textContent = comment.commenter.display_name;
+        if (comment.message.user_color) {
+            username.style.color = comment.message.user_color;
+        }
+        messageDiv.appendChild(username);
 
-    // Основная функция обновления чата
-    const updateChat = ({ time }) => {
-        if (Math.abs(time - lastUpdateTime) < 0.5) return;
-        lastUpdateTime = time;
+        const colon = document.createElement('span');
+        colon.textContent = ': ';
+        messageDiv.appendChild(colon);
 
-        const startTime = Math.max(0, time - TIME_WINDOW);
-        const endTime = time + TIME_WINDOW;
-        
-        // Бинарный поиск для оптимизации
-        const findIndex = (target) => {
-            let low = 0, high = chatData.comments.length;
-            while (low < high) {
-                const mid = (low + high) >>> 1;
-                if (chatData.comments[mid].content_offset_seconds < target) low = mid + 1;
-                else high = mid;
-            }
-            return low;
-        };
+        const messageContent = document.createElement('span');
+        messageContent.className = 'message-content';
 
-        const startIdx = findIndex(startTime);
-        const endIdx = findIndex(endTime);
-        const newMessages = chatData.comments.slice(startIdx, endIdx).slice(-MAX_MESSAGES);
-
-        if (JSON.stringify(newMessages) === JSON.stringify(currentMessages)) return;
-        currentMessages = newMessages;
-
-        renderMessages(newMessages);
-    };
-
-    // Рендер сообщений
-    const renderMessages = (messages) => {
-        const fragment = document.createDocumentFragment();
-        const chatContainer = document.getElementById('chat-messages');
-        
-        messages.forEach(comment => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'chat-message';
-            messageDiv.dataset.time = comment.content_offset_seconds;
-            
-            // Бейджи
-            const badgesDiv = document.createElement('div');
-            badgesDiv.className = 'chat-badges';
-            if (comment.message.user_badges) {
-                comment.message.user_badges.forEach(badge => {
-                    const badgeData = chatData.badges?.find(b => b.name === badge._id);
-                    if (badgeData?.versions?.[badge.version]) {
-                        const img = document.createElement('img');
-                        img.src = badgeData.versions[badge.version].image_url_1x;
-                        img.className = 'chat-badge';
-                        badgesDiv.appendChild(img);
-                    }
-                });
-            }
-
-            // Имя пользователя
-            const userSpan = document.createElement('span');
-            userSpan.className = 'chat-user';
-            userSpan.style.color = comment.message.user_color || '#fff';
-            userSpan.textContent = comment.commenter.display_name;
-
-            // Контент сообщения
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'chat-content';
-            comment.message.fragments?.forEach(fragment => {
+        if (comment.message.fragments) {
+            comment.message.fragments.forEach(fragment => {
                 if (fragment.emoticon) {
-                    const emoteData = chatData.emotes?.find(e => e.id === fragment.emoticon.emoticon_id);
-                    if (emoteData) {
-                        const img = document.createElement('img');
-                        img.src = emoteData.data ? `data:image/png;base64,${emoteData.data}` : emoteData.url;
-                        img.className = 'chat-emote';
-                        contentDiv.appendChild(img);
+                    const emote = document.createElement('img');
+                    emote.className = 'emote';
+                    const emoteId = fragment.emoticon.emoticon_id;
+                    if (emoticons[emoteId]) {
+                        emote.src = emoticons[emoteId].url || `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                    } else {
+                        emote.src = `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
                     }
+                    emote.alt = fragment.text;
+                    emote.title = fragment.text;
+                    messageContent.appendChild(emote);
                 } else {
-                    contentDiv.appendChild(document.createTextNode(fragment.text));
+                    messageContent.appendChild(document.createTextNode(fragment.text));
+                }
+            });
+        } else {
+            messageContent.textContent = comment.message.body;
+        }
+
+        messageDiv.appendChild(messageContent);
+        return messageDiv;
+    }
+
+    let currentVideoTime = 0;
+    let isPlaying = false;
+
+    // Функция для отображения последних 100 сообщений до текущего времени
+    function showMessagesUpToTime(timeInSeconds) {
+        const chatMessages = document.getElementById('chat-messages');
+
+        // Находим индекс первого сообщения, которое еще не должно быть показано
+        const index = sortedComments.findIndex(comment => comment.content_offset_seconds > timeInSeconds);
+        const messagesToShow = sortedComments.slice(Math.max(0, index - 100), index);
+
+        // Очищаем чат
+        chatMessages.innerHTML = '';
+
+        // Добавляем последние 100 сообщений
+        messagesToShow.forEach(comment => {
+            const messageDiv = processMessage(comment);
+            chatMessages.appendChild(messageDiv);
+        });
+
+        // Прокручиваем чат вниз
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    // Инициализация VideoPlayer API ВКонтакте
+    let player;
+    let playerInitialized = false;
+
+    function initVideoPlayer() {
+        try {
+            // Проверяем, доступен ли VK объект
+            if (typeof VK === 'undefined') {
+                throw new Error('API ВКонтакте не загрузилось. Проверьте настройки безопасности браузера.');
+            }
+
+            const iframe = document.getElementById('vk-player');
+            player = VK.VideoPlayer(iframe);
+
+            player.on(VK.VideoPlayer.Events.INITED, function(state) {
+                console.log('Плеер инициализирован', state);
+                playerInitialized = true;
+                updateTime();
+            });
+
+            player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
+                if (isPlaying) {
+                    currentVideoTime = state.time;
+                    showMessagesUpToTime(currentVideoTime);
                 }
             });
 
-            // Сборка элементов
-            messageDiv.append(badgesDiv, userSpan, contentDiv);
-            fragment.appendChild(messageDiv);
-        });
+            player.on(VK.VideoPlayer.Events.STARTED, function(state) {
+                isPlaying = true;
+            });
 
-        chatContainer.innerHTML = '';
-        chatContainer.appendChild(fragment);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-    };
+            player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
+                isPlaying = false;
+            });
 
-    // Обработчик клика для перемотки
-    document.getElementById('chat-messages').addEventListener('click', (e) => {
-        const messageDiv = e.target.closest('.chat-message');
-        if (messageDiv && player) {
-            player.seek(parseFloat(messageDiv.dataset.time));
+            player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
+                isPlaying = true;
+            });
+
+            player.on(VK.VideoPlayer.Events.ERROR, function(state) {
+                console.error('Ошибка воспроизведения', state);
+            });
+
+        } catch (error) {
+            console.error('Ошибка инициализации плеера:', error);
+            // Выводим предупреждение в интерфейсе
+            const chatMessages = document.getElementById('chat-messages');
+            chatMessages.innerHTML = '<p class="error">Не удалось загрузить плеер ВКонтакте. Проверьте настройки безопасности браузера или отключите блокировку сторонних скриптов.</p>';
+        }
+    }
+
+    // Функция обновления времени
+    function updateTime() {
+        if (playerInitialized) {
+            try {
+                currentVideoTime = player.getCurrentTime();
+                showMessagesUpToTime(currentVideoTime);
+            } catch (error) {
+                console.error('Ошибка при получении текущего времени:', error);
+            }
+        }
+    }
+
+    // Функция для перемотки видео
+    function seekToTime(seconds) {
+        if (playerInitialized) {
+            try {
+                player.seek(seconds);
+                currentVideoTime = seconds;
+                showMessagesUpToTime(currentVideoTime);
+            } catch (error) {
+                console.error('Ошибка при перемотке видео:', error);
+            }
+        }
+    }
+
+    // Инициализируем плеер
+    initVideoPlayer();
+
+    // Обработчик клика по сообщениям для перемотки
+    document.getElementById('chat-messages').addEventListener('click', function(event) {
+        const chatMessage = event.target.closest('.chat-message');
+        if (chatMessage && chatMessage.dataset.time) {
+            const timeToSeek = parseFloat(chatMessage.dataset.time);
+            seekToTime(timeToSeek);
         }
     });
-
-    // Инициализация
-    if (typeof VK !== 'undefined') {
-        initPlayer();
-    } else {
-        console.warn('VK API не загружен, используется fallback');
-        startFallback();
-    }
 });

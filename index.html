@@ -6,12 +6,11 @@
     <title>Twitch VOD с чатом</title>
     <link rel="stylesheet" href="styles.css">
     <!-- Подключаем API видеоплеера ВКонтакте -->
-    <script src="https://vk.com/js/api/videoplayer.js"></script>
+    <script src="/js/videoplayer.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="video-container">
-            <!-- Добавляем js_api=1 для включения JavaScript API -->
             <iframe id="vk-player" 
                 src="https://vkvideo.ru/video_ext.php?oid=-181822274&id=456239298&hd=3&js_api=1" 
                 width="100%" 
@@ -24,9 +23,6 @@
         <div class="chat-container">
             <div class="chat-header">
                 <h3>Twitch Chat</h3>
-                <!-- <div class="playback-controls">
-                    <button id="sync-chat" title="Синхронизировать чат с видео">Синхронизировать</button>
-                </div> -->
             </div>
             <div id="chat-messages"></div>
         </div>
