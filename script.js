@@ -168,12 +168,17 @@ document.addEventListener('DOMContentLoaded', async function() {
                 manageAutoScroll();
             });
 
+            // Обработчик обновления времени с обнаружением перемотки (seek)
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                if (isPlaying) {
-                    currentVideoTime = state.time;
-                    if (isAutoScrolling) {
-                        showMessagesUpToTime(currentVideoTime);
-                    }
+                const jumpThreshold = 5; // порог в секундах для обнаружения перемотки
+                // Если разница между новым и текущим временем больше порога, считаем, что произошёл seek
+                if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
+                    isAutoScrolling = true;
+                    isUserScrolling = false;
+                }
+                currentVideoTime = state.time;
+                if (isAutoScrolling) {
+                    showMessagesUpToTime(currentVideoTime);
                 }
             });
 
@@ -184,7 +189,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
                 isPlaying = false;
             });
-            
 
             player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
                 isPlaying = true;
@@ -218,6 +222,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             try {
                 player.seek(seconds);
                 currentVideoTime = seconds;
+                // При перемотке видео снимаем состояние ручного скроллинга и включаем автопрокрутку
+                isUserScrolling = false;
                 isAutoScrolling = true;
                 showMessagesUpToTime(currentVideoTime);
                 manageAutoScroll();
