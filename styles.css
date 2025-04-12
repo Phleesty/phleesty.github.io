@@ -152,3 +152,16 @@ body {
         height: 50vh;
     }
 }
+
+#auto-scroll-button {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: white;
+    color: black;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: none; /* Initially hidden */
+}
