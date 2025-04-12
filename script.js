@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Функция форматирования времени
+    // Функция форматирования времени в формат ЧЧ:ММ:СС
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -50,9 +50,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         messageDiv.className = 'chat-message';
         messageDiv.dataset.time = comment.content_offset_seconds;
 
+        // Создадим элемент времени и добавим его в сообщение
         const timestamp = document.createElement('span');
         timestamp.className = 'timestamp';
         timestamp.textContent = formatTime(comment.content_offset_seconds);
+        // Запишем время также в data-атрибуте для прямого использования
+        timestamp.dataset.time = comment.content_offset_seconds;
         messageDiv.appendChild(timestamp);
 
         if (comment.message.user_badges && comment.message.user_badges.length > 0) {
@@ -91,7 +94,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     const emote = document.createElement('img');
                     emote.className = 'emote';
                     const emoteId = fragment.emoticon.emoticon_id;
-                    emote.src = (emoticons[emoteId] && emoticons[emoteId].url) ? emoticons[emoteId].url
+                    emote.src = (emoticons[emoteId] && emoticons[emoteId].url) 
+                        ? emoticons[emoteId].url 
                         : `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
                     emote.alt = fragment.text;
                     emote.title = fragment.text;
@@ -113,11 +117,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     const autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
-    const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
+    const lastMessageTime = sortedComments.length 
+        ? sortedComments[sortedComments.length - 1].content_offset_seconds 
+        : 0;
     
-    // Счётчик для отслеживания отображённых сообщений
+    // Счётчик отображённых сообщений
     let messageIndex = 0;
 
+    // Функция управления автоскроллом
     function manageAutoScroll() {
         if (isAutoScrolling) {
             autoScrollButton.classList.remove('show');
@@ -127,7 +134,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Обновление сообщений чата. При перемотке (isSeek = true) выполняем полный ререндер.
+    // Обновление сообщений чата.
+    // При перемотке (isSeek = true) происходит полный ререндер.
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
@@ -149,7 +157,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Инициализация плеера VK
+    // Инициализация плеера ВКонтакте
     let player;
     let playerInitialized = false;
     function initVideoPlayer() {
@@ -221,13 +229,24 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     initVideoPlayer();
 
-    // Обработка события скролла для отключения автоскролла при ручном скролле
+    // Обработка события скролла: если пользователь вручную прокручивает чат,
+    // отключается автоскролл (если не у самого низа)
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
         isAutoScrolling = isAtBottom;
         manageAutoScroll();
         setTimeout(() => { isUserScrolling = false; }, 100);
+    });
+
+    // Восстанавливаем функционал перехода к таймингу видео: при клике на элемент времени
+    chatMessages.addEventListener('click', (e) => {
+        if (e.target.classList.contains('timestamp')) {
+            const time = parseFloat(e.target.dataset.time);
+            if (!isNaN(time)) {
+                seekToTime(time);
+            }
+        }
     });
 
     // Обработчик для кнопки авто-прокрутки
