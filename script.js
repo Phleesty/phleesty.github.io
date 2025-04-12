@@ -114,22 +114,16 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let currentVideoTime = 0;
     let isPlaying = false;
-    // Переменные для управления автопрокруткой
     let isAutoScrolling = true;
     const autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
     const lastMessageTime = sortedComments.length > 0 ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
     
-    // Для постепенного добавления сообщений используем указатель
+    // Переменная для отслеживания текущего индекса загруженных сообщений
     let messageIndex = 0;
 
-    // Выравниваем содержимое чата по нижней границе
-    chatMessages.style.display = 'flex';
-    chatMessages.style.flexDirection = 'column';
-    chatMessages.style.justifyContent = 'flex-end';
-
-    // Функция прокрутки чата (автопрокрутка к низу)
+    // Функция для управления автопрокруткой
     function manageAutoScroll() {
         if (isAutoScrolling) {
             autoScrollButton.style.display = 'none';
@@ -140,11 +134,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
 
     // Функция обновления сообщений чата
-    // isSeek = true означает, что видео перемотали назад или прыжок во времени – тогда выполняется полный ререндер
+    // isSeek = true означает полный ререндер (например, при перемотке)
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
-            // Определяем сколько сообщений должны быть показаны к текущему времени
             let newIndex = sortedComments.findIndex(comment => comment.content_offset_seconds > timeInSeconds);
             if (newIndex === -1) {
                 newIndex = sortedComments.length;
@@ -155,7 +148,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 chatMessages.appendChild(msgElement);
             }
         } else {
-            // При обычном ходе видео добавляем сообщения по мере появления
             while (messageIndex < sortedComments.length &&
                    sortedComments[messageIndex].content_offset_seconds <= timeInSeconds) {
                 const msgElement = processMessage(sortedComments[messageIndex]);
@@ -177,10 +169,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             if (typeof VK === 'undefined') {
                 throw new Error('API ВКонтакте не загрузилось.');
             }
-
             const iframe = document.getElementById('vk-player');
             player = VK.VideoPlayer(iframe);
-
             player.on(VK.VideoPlayer.Events.INITED, function(state) {
                 console.log('Плеер инициализирован', state);
                 playerInitialized = true;
@@ -190,16 +180,12 @@ document.addEventListener('DOMContentLoaded', async function() {
                 } catch (e) {
                     console.warn('Автозапуск не удался:', e);
                 }
-                // При инициализации рендерим сообщения в соответствии с текущим временем (скорее всего 0)
                 updateChatMessages(player.getCurrentTime(), true);
                 isAutoScrolling = true;
                 manageAutoScroll();
             });
-
-            // Обработчик обновления времени
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                const jumpThreshold = 5; // порог в секундах для определения резкого скачка времени
-                // Если произошёл прыжок (перемотка)
+                const jumpThreshold = 5; // порог для определения перемотки
                 if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
                     isAutoScrolling = true;
                     isUserScrolling = false;
@@ -209,23 +195,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
                 currentVideoTime = state.time;
             });
-
             player.on(VK.VideoPlayer.Events.STARTED, function(state) {
                 isPlaying = true;
             });
-
             player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
                 isPlaying = false;
             });
-
             player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
                 isPlaying = true;
             });
-
             player.on(VK.VideoPlayer.Events.ERROR, function(state) {
                 console.error('Ошибка воспроизведения', state);
             });
-
         } catch (error) {
             console.error('Ошибка инициализации плеера:', error);
             chatMessages.innerHTML = '<p class="error">Не удалось загрузить плеер ВКонтакте.</p>';
@@ -238,7 +219,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             try {
                 player.seek(seconds);
                 currentVideoTime = seconds;
-                // При перемотке выполняется полный ререндер сообщений
                 isUserScrolling = false;
                 isAutoScrolling = true;
                 updateChatMessages(seconds, true);
@@ -249,10 +229,8 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Инициализируем плеер
     initVideoPlayer();
 
-    // Слушатель события scroll для управления автопрокруткой
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
@@ -263,7 +241,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }, 100);
     });
 
-    // Обработчик клика по сообщениям для перемотки
     chatMessages.addEventListener('click', function(event) {
         const chatMessage = event.target.closest('.chat-message');
         if (chatMessage && chatMessage.dataset.time) {
@@ -272,7 +249,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // Обработчик для кнопки возобновления автопрокрутки
     autoScrollButton.addEventListener('click', () => {
         isAutoScrolling = true;
         updateChatMessages(currentVideoTime, true);
