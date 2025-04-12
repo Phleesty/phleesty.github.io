@@ -14,15 +14,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    // Карта эмотиконов для быстрого доступа
+    // Карты эмотиконов и бейджей
     const emoticons = {};
     if (chatData.emotes) {
         chatData.emotes.forEach(emote => {
             emoticons[emote.id] = emote;
         });
     }
-
-    // Карта бейджей для быстрого доступа
     const badges = {};
     if (chatData.badges) {
         chatData.badges.forEach(badge => {
@@ -33,12 +31,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Сортируем сообщения по времени (по возрастанию)
+    // Сортировка сообщений по времени (по возрастанию)
     const sortedComments = chatData.comments.sort((a, b) =>
         a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Функция для форматирования времени в формат ЧЧ:ММ:СС
+    // Функция форматирования времени в формат ЧЧ:ММ:СС
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -46,7 +44,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
     }
 
-    // Функция для создания элемента сообщения
+    // Функция создания элемента сообщения
     function processMessage(comment) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chat-message';
@@ -93,11 +91,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     const emote = document.createElement('img');
                     emote.className = 'emote';
                     const emoteId = fragment.emoticon.emoticon_id;
-                    if (emoticons[emoteId]) {
-                        emote.src = emoticons[emoteId].url || `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
-                    } else {
-                        emote.src = `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
-                    }
+                    emote.src = (emoticons[emoteId] && emoticons[emoteId].url) ? emoticons[emoteId].url
+                              : `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
                     emote.alt = fragment.text;
                     emote.title = fragment.text;
                     messageContent.appendChild(emote);
@@ -114,16 +109,17 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let currentVideoTime = 0;
     let isPlaying = false;
+    // Флаги автоматической прокрутки и ручного взаимодействия
     let isAutoScrolling = true;
     const autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
-    const lastMessageTime = sortedComments.length > 0 ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
+    const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
     
-    // Переменная для отслеживания текущего индекса загруженных сообщений
+    // Счетчик для отслеживания отображённых сообщений
     let messageIndex = 0;
 
-    // Функция для управления автопрокруткой
+    // Функция, которая в случае включенного автоскролла устанавливает scrollTop в нижнюю позицию
     function manageAutoScroll() {
         if (isAutoScrolling) {
             autoScrollButton.style.display = 'none';
@@ -133,28 +129,25 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Функция обновления сообщений чата
-    // isSeek = true означает полный ререндер (например, при перемотке)
+    // Функция обновления сообщений чата: при перемотке (isSeek = true) производится полный ререндер
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
             let newIndex = sortedComments.findIndex(comment => comment.content_offset_seconds > timeInSeconds);
-            if (newIndex === -1) {
-                newIndex = sortedComments.length;
-            }
+            if (newIndex === -1) newIndex = sortedComments.length;
             messageIndex = newIndex;
             for (let i = 0; i < messageIndex; i++) {
-                const msgElement = processMessage(sortedComments[i]);
-                chatMessages.appendChild(msgElement);
+                chatMessages.appendChild(processMessage(sortedComments[i]));
             }
         } else {
+            // Добавляем сообщения по мере продвижения времени
             while (messageIndex < sortedComments.length &&
                    sortedComments[messageIndex].content_offset_seconds <= timeInSeconds) {
-                const msgElement = processMessage(sortedComments[messageIndex]);
-                chatMessages.appendChild(msgElement);
+                chatMessages.appendChild(processMessage(sortedComments[messageIndex]));
                 messageIndex++;
             }
         }
+        // Если включена автопрокрутка, скроллим вниз
         if (isAutoScrolling) {
             manageAutoScroll();
         }
@@ -163,7 +156,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Инициализация VideoPlayer API ВКонтакте
     let player;
     let playerInitialized = false;
-
     function initVideoPlayer() {
         try {
             if (typeof VK === 'undefined') {
@@ -171,21 +163,23 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             const iframe = document.getElementById('vk-player');
             player = VK.VideoPlayer(iframe);
+
             player.on(VK.VideoPlayer.Events.INITED, function(state) {
                 console.log('Плеер инициализирован', state);
                 playerInitialized = true;
-                // Автовоспроизведение видео
                 try {
                     player.play();
                 } catch (e) {
                     console.warn('Автозапуск не удался:', e);
                 }
+                // Первоначальное обновление чата
                 updateChatMessages(player.getCurrentTime(), true);
                 isAutoScrolling = true;
                 manageAutoScroll();
             });
+
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                const jumpThreshold = 5; // порог для определения перемотки
+                const jumpThreshold = 5; // Порог для обнаружения перемотки
                 if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
                     isAutoScrolling = true;
                     isUserScrolling = false;
@@ -195,6 +189,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
                 currentVideoTime = state.time;
             });
+
             player.on(VK.VideoPlayer.Events.STARTED, function(state) {
                 isPlaying = true;
             });
@@ -213,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Функция для перемотки видео
+    // Функция перемотки видео (с сохранением логики рендера сообщений)
     function seekToTime(seconds) {
         if (playerInitialized) {
             try {
@@ -231,24 +226,17 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     initVideoPlayer();
 
+    // Событие скролла чата: если пользователь прокручивает вручную,
+    // отключаем автоскролл (isAutoScrolling становится true только если пользователь в самом низу)
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
         isAutoScrolling = isAtBottom;
         manageAutoScroll();
-        setTimeout(() => {
-            isUserScrolling = false;
-        }, 100);
+        setTimeout(() => { isUserScrolling = false; }, 100);
     });
 
-    chatMessages.addEventListener('click', function(event) {
-        const chatMessage = event.target.closest('.chat-message');
-        if (chatMessage && chatMessage.dataset.time) {
-            const timeToSeek = parseFloat(chatMessage.dataset.time);
-            seekToTime(timeToSeek);
-        }
-    });
-
+    // Обработчик для кнопки авто-прокрутки
     autoScrollButton.addEventListener('click', () => {
         isAutoScrolling = true;
         updateChatMessages(currentVideoTime, true);

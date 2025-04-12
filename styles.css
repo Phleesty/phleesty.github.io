@@ -70,9 +70,7 @@ body {
 }
 
 #chat-messages {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end; /* Прижимает содержимое к нижней границе */
+    display: block;
     flex: 1;
     overflow-y: auto;
     padding: 0px 14px;
@@ -89,8 +87,6 @@ body {
 
 .chat-message:hover {
     background-color: #1f1f23;
-    border-radius: 4px;
-    padding-left: 4px;
 }
 
 .chat-message .timestamp {
