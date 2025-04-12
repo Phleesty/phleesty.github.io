@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Функция форматирования времени в формат ЧЧ:ММ:СС
+    // Функция форматирования времени
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -92,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     emote.className = 'emote';
                     const emoteId = fragment.emoticon.emoticon_id;
                     emote.src = (emoticons[emoteId] && emoticons[emoteId].url) ? emoticons[emoteId].url
-                              : `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                        : `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
                     emote.alt = fragment.text;
                     emote.title = fragment.text;
                     messageContent.appendChild(emote);
@@ -109,27 +109,25 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     let currentVideoTime = 0;
     let isPlaying = false;
-    // Флаги автоматической прокрутки и ручного взаимодействия
     let isAutoScrolling = true;
     const autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
     const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
     
-    // Счетчик для отслеживания отображённых сообщений
+    // Счётчик для отслеживания отображённых сообщений
     let messageIndex = 0;
 
-    // Функция, которая в случае включенного автоскролла устанавливает scrollTop в нижнюю позицию
     function manageAutoScroll() {
         if (isAutoScrolling) {
-            autoScrollButton.style.display = 'none';
+            autoScrollButton.classList.remove('show');
             chatMessages.scrollTop = chatMessages.scrollHeight;
         } else {
-            autoScrollButton.style.display = 'block';
+            autoScrollButton.classList.add('show');
         }
     }
 
-    // Функция обновления сообщений чата: при перемотке (isSeek = true) производится полный ререндер
+    // Обновление сообщений чата. При перемотке (isSeek = true) выполняем полный ререндер.
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
@@ -140,20 +138,18 @@ document.addEventListener('DOMContentLoaded', async function() {
                 chatMessages.appendChild(processMessage(sortedComments[i]));
             }
         } else {
-            // Добавляем сообщения по мере продвижения времени
             while (messageIndex < sortedComments.length &&
                    sortedComments[messageIndex].content_offset_seconds <= timeInSeconds) {
                 chatMessages.appendChild(processMessage(sortedComments[messageIndex]));
                 messageIndex++;
             }
         }
-        // Если включена автопрокрутка, скроллим вниз
         if (isAutoScrolling) {
             manageAutoScroll();
         }
     }
 
-    // Инициализация VideoPlayer API ВКонтакте
+    // Инициализация плеера VK
     let player;
     let playerInitialized = false;
     function initVideoPlayer() {
@@ -172,14 +168,13 @@ document.addEventListener('DOMContentLoaded', async function() {
                 } catch (e) {
                     console.warn('Автозапуск не удался:', e);
                 }
-                // Первоначальное обновление чата
                 updateChatMessages(player.getCurrentTime(), true);
                 isAutoScrolling = true;
                 manageAutoScroll();
             });
 
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                const jumpThreshold = 5; // Порог для обнаружения перемотки
+                const jumpThreshold = 5;
                 if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
                     isAutoScrolling = true;
                     isUserScrolling = false;
@@ -208,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Функция перемотки видео (с сохранением логики рендера сообщений)
+    // Функция перемотки видео
     function seekToTime(seconds) {
         if (playerInitialized) {
             try {
@@ -226,8 +221,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     initVideoPlayer();
 
-    // Событие скролла чата: если пользователь прокручивает вручную,
-    // отключаем автоскролл (isAutoScrolling становится true только если пользователь в самом низу)
+    // Обработка события скролла для отключения автоскролла при ручном скролле
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
