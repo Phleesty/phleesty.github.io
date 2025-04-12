@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     let isPlaying = false;
     // Переменные для управления автопрокруткой
     let isAutoScrolling = true;
-    let autoScrollButton = document.getElementById('auto-scroll-button'); // Получаем кнопку сразу
+    let autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
     const lastMessageTime = sortedComments.length > 0 ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
@@ -134,9 +134,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Функция для отображения сообщений до текущего времени
     function showMessagesUpToTime(timeInSeconds) {
-        // Находим индекс первого сообщения, которое еще не должно быть показано
         const index = sortedComments.findIndex(comment => comment.content_offset_seconds > timeInSeconds);
-        const messagesToShow = sortedComments.slice(Math.max(0, index - 100), index);
+        const messagesToShow = sortedComments.slice(0, index);
         chatMessages.innerHTML = '';
         messagesToShow.forEach(comment => {
             const messageDiv = processMessage(comment);
@@ -154,9 +153,8 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     function initVideoPlayer() {
         try {
-            // Проверяем, доступен ли VK объект
             if (typeof VK === 'undefined') {
-                throw new Error('API ВКонтакте не загрузилось. Проверьте настройки безопасности браузера.');
+                throw new Error('API ВКонтакте не загрузилось.');
             }
 
             const iframe = document.getElementById('vk-player');
@@ -173,10 +171,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
                 if (isPlaying) {
                     currentVideoTime = state.time;
-                    showMessagesUpToTime(currentVideoTime);
-                    if(!isUserScrolling){
-                        isAutoScrolling = true;
-                        manageAutoScroll();
+                    if (isAutoScrolling) {
+                        showMessagesUpToTime(currentVideoTime);
                     }
                 }
             });
@@ -188,6 +184,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
                 isPlaying = false;
             });
+            
 
             player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
                 isPlaying = true;
@@ -199,8 +196,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
         } catch (error) {
             console.error('Ошибка инициализации плеера:', error);
-            // Выводим предупреждение в интерфейсе
-            chatMessages.innerHTML = '<p class="error">Не удалось загрузить плеер ВКонтакте. Проверьте настройки безопасности браузера или отключите блокировку сторонних скриптов.</p>';
+            chatMessages.innerHTML = '<p class="error">Не удалось загрузить плеер ВКонтакте.</p>';
         }
     }
 
@@ -233,19 +229,18 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     // Инициализируем плеер
     initVideoPlayer();
-    // Добавляем слушатель события scroll для управления автопрокруткой
+
+    // Слушатель события scroll для управления автопрокруткой
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
-        if (chatMessages.scrollTop + chatMessages.clientHeight < chatMessages.scrollHeight) {
-            isAutoScrolling = false;
-        } else {
-            isAutoScrolling = true;
-        }
+        const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
+        isAutoScrolling = isAtBottom;
         manageAutoScroll();
         setTimeout(() => {
             isUserScrolling = false;
         }, 100);
     });
+
     // Обработчик клика по сообщениям для перемотки
     chatMessages.addEventListener('click', function(event) {
         const chatMessage = event.target.closest('.chat-message');
@@ -253,5 +248,12 @@ document.addEventListener('DOMContentLoaded', async function() {
             const timeToSeek = parseFloat(chatMessage.dataset.time);
             seekToTime(timeToSeek);
         }
+    });
+
+    // Обработчик для кнопки возобновления автопрокрутки
+    autoScrollButton.addEventListener('click', () => {
+        isAutoScrolling = true;
+        showMessagesUpToTime(currentVideoTime);
+        manageAutoScroll();
     });
 });
