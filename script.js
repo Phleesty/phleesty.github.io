@@ -14,13 +14,15 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    // Карты эмотиконов и бейджей
+    // Карта стандартных Twitch-эмодзи
     const emoticons = {};
     if (chatData.emotes) {
         chatData.emotes.forEach(emote => {
             emoticons[emote.id] = emote;
         });
     }
+
+    // Карта стандартных бейджей
     const badges = {};
     if (chatData.badges) {
         chatData.badges.forEach(badge => {
@@ -31,12 +33,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Сортировка сообщений по времени (по возрастанию)
+    // Сортировка сообщений по времени
     const sortedComments = chatData.comments.sort((a, b) =>
         a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Функция форматирования времени в формат ЧЧ:ММ:СС
+    // Функция форматирования времени
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -44,26 +46,60 @@ document.addEventListener('DOMContentLoaded', async function() {
         return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
     }
 
-    // Функция создания элемента сообщения
+    // Построение карты кастомных эмодзи (7TV, BTTV, FFZ) из embeddedData
+    const customEmotes = {};
+    if (chatData.embeddedData) {
+        if (chatData.embeddedData.thirdParty) {
+            chatData.embeddedData.thirdParty.forEach(emote => {
+                if (emote.name) {
+                    customEmotes[emote.name] = emote;
+                }
+            });
+        }
+        if (chatData.embeddedData.firstParty) {
+            chatData.embeddedData.firstParty.forEach(emote => {
+                if (emote.id) {
+                    customEmotes[emote.id] = emote;
+                }
+            });
+        }
+    }
+
+    // Построение карты кастомных бейджей из embeddedData.twitchBadges
+    const customBadges = {};
+    if (chatData.embeddedData && chatData.embeddedData.twitchBadges) {
+         chatData.embeddedData.twitchBadges.forEach(badge => {
+            customBadges[badge.name] = badge;
+         });
+    }
+
+    // Функция создания элемента сообщения с обработкой бейджей и смайликов
     function processMessage(comment) {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'chat-message';
         messageDiv.dataset.time = comment.content_offset_seconds;
 
-        // Создадим элемент времени и добавим его в сообщение
+        // Элемент времени (timestamp) – клик по нему перематывает видео
         const timestamp = document.createElement('span');
         timestamp.className = 'timestamp';
         timestamp.textContent = formatTime(comment.content_offset_seconds);
-        // Запишем время также в data-атрибуте для прямого использования
         timestamp.dataset.time = comment.content_offset_seconds;
         messageDiv.appendChild(timestamp);
 
+        // Обработка бейджей пользователя
         if (comment.message.user_badges && comment.message.user_badges.length > 0) {
             comment.message.user_badges.forEach(badge => {
                 const badgeImg = document.createElement('img');
                 badgeImg.className = 'badge';
-                if (badges[badge._id] && badges[badge._id][badge.version]) {
-                    badgeImg.src = badges[badge._id][badge.version].image_url_1x;
+                let badgeImageSrc = null;
+                if (customBadges[badge._id] && customBadges[badge._id].versions[badge.version]) {
+                    badgeImageSrc = customBadges[badge._id].versions[badge.version].bytes;
+                } else if (badges[badge._id] && badges[badge._id][badge.version]) {
+                    badgeImageSrc = badges[badge._id][badge.version].image_url_1x;
+                }
+                if (badgeImageSrc) {
+                    // Формируем data URL из base64 строки
+                    badgeImg.src = "data:image/png;base64," + badgeImageSrc;
                     badgeImg.alt = badge._id;
                     badgeImg.title = badge._id;
                     badgeImg.width = 18;
@@ -73,6 +109,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             });
         }
 
+        // Имя пользователя
         const username = document.createElement('span');
         username.className = 'username';
         username.textContent = comment.commenter.display_name;
@@ -85,23 +122,43 @@ document.addEventListener('DOMContentLoaded', async function() {
         colon.textContent = ': ';
         messageDiv.appendChild(colon);
 
+        // Контейнер для текста сообщения
         const messageContent = document.createElement('span');
         messageContent.className = 'message-content';
 
+        // Обработка фрагментов сообщения
         if (comment.message.fragments) {
             comment.message.fragments.forEach(fragment => {
                 if (fragment.emoticon) {
                     const emote = document.createElement('img');
                     emote.className = 'emote';
                     const emoteId = fragment.emoticon.emoticon_id;
-                    emote.src = (emoticons[emoteId] && emoticons[emoteId].url) 
-                        ? emoticons[emoteId].url 
-                        : `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                    if (emoticons[emoteId]) {
+                        emote.src = emoticons[emoteId].url || `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                    } else {
+                        emote.src = `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                    }
                     emote.alt = fragment.text;
                     emote.title = fragment.text;
                     messageContent.appendChild(emote);
                 } else {
-                    messageContent.appendChild(document.createTextNode(fragment.text));
+                    // Если текст фрагмента совпадает с именем кастомного эмодзи – выводим картинку
+                    if (customEmotes[fragment.text]) {
+                        const emote = document.createElement('img');
+                        emote.className = 'emote';
+                        emote.src = "data:image/png;base64," + customEmotes[fragment.text].data;
+                        emote.alt = fragment.text;
+                        emote.title = fragment.text;
+                        if (customEmotes[fragment.text].width) {
+                            emote.style.width = customEmotes[fragment.text].width + 'px';
+                        }
+                        if (customEmotes[fragment.text].height) {
+                            emote.style.height = customEmotes[fragment.text].height + 'px';
+                        }
+                        messageContent.appendChild(emote);
+                    } else {
+                        messageContent.appendChild(document.createTextNode(fragment.text));
+                    }
                 }
             });
         } else {
@@ -117,14 +174,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     const autoScrollButton = document.getElementById('auto-scroll-button');
     const chatMessages = document.getElementById('chat-messages');
     let isUserScrolling = false;
-    const lastMessageTime = sortedComments.length 
-        ? sortedComments[sortedComments.length - 1].content_offset_seconds 
-        : 0;
+    const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
     
-    // Счётчик отображённых сообщений
+    // Счетчик отображенных сообщений
     let messageIndex = 0;
 
-    // Функция управления автоскроллом
     function manageAutoScroll() {
         if (isAutoScrolling) {
             autoScrollButton.classList.remove('show');
@@ -134,8 +188,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Обновление сообщений чата.
-    // При перемотке (isSeek = true) происходит полный ререндер.
+    // Обновление сообщений чата: isSeek === true означает полный ререндер (например, при перемотке)
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
@@ -167,7 +220,6 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             const iframe = document.getElementById('vk-player');
             player = VK.VideoPlayer(iframe);
-
             player.on(VK.VideoPlayer.Events.INITED, function(state) {
                 console.log('Плеер инициализирован', state);
                 playerInitialized = true;
@@ -180,7 +232,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 isAutoScrolling = true;
                 manageAutoScroll();
             });
-
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
                 const jumpThreshold = 5;
                 if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
@@ -192,7 +243,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
                 currentVideoTime = state.time;
             });
-
             player.on(VK.VideoPlayer.Events.STARTED, function(state) {
                 isPlaying = true;
             });
@@ -211,7 +261,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Функция перемотки видео
+    // Функция перемотки видео (по клику на timestamp)
     function seekToTime(seconds) {
         if (playerInitialized) {
             try {
@@ -229,8 +279,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     initVideoPlayer();
 
-    // Обработка события скролла: если пользователь вручную прокручивает чат,
-    // отключается автоскролл (если не у самого низа)
+    // Обработка скролла чата
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
@@ -239,7 +288,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         setTimeout(() => { isUserScrolling = false; }, 100);
     });
 
-    // Восстанавливаем функционал перехода к таймингу видео: при клике на элемент времени
+    // Обработчик клика по timestamp – перематываем видео к указанному времени
     chatMessages.addEventListener('click', (e) => {
         if (e.target.classList.contains('timestamp')) {
             const time = parseFloat(e.target.dataset.time);
