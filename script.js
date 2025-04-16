@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
-    // Карта стандартных Twitch-эмодзи
+    // Стандартные Twitch-эмодзи
     const emoticons = {};
     if (chatData.emotes) {
         chatData.emotes.forEach(emote => {
@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Карта стандартных бейджей
+    // Стандартные бейджи
     const badges = {};
     if (chatData.badges) {
         chatData.badges.forEach(badge => {
@@ -33,12 +33,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
-    // Сортировка сообщений по времени
+    // Сортировка сообщений по времени (по возрастанию)
     const sortedComments = chatData.comments.sort((a, b) =>
         a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Функция форматирования времени
+    // Форматирование времени в формат ЧЧ:ММ:СС
     function formatTime(seconds) {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
@@ -68,9 +68,35 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Построение карты кастомных бейджей из embeddedData.twitchBadges
     const customBadges = {};
     if (chatData.embeddedData && chatData.embeddedData.twitchBadges) {
-         chatData.embeddedData.twitchBadges.forEach(badge => {
+        chatData.embeddedData.twitchBadges.forEach(badge => {
             customBadges[badge.name] = badge;
-         });
+        });
+    }
+
+    // Функция для обработки текстового фрагмента с возможной заменой кастомного эмодзи
+    function processTextFragment(text) {
+        const fragmentContainer = document.createDocumentFragment();
+        // Разбиваем строку, сохраняя пробелы
+        const tokens = text.split(/(\s+)/);
+        tokens.forEach(token => {
+            if (customEmotes.hasOwnProperty(token)) { // строгое сравнение, регистр важен
+                const emote = document.createElement('img');
+                emote.className = 'emote';
+                emote.src = "data:image/png;base64," + customEmotes[token].data;
+                emote.alt = token;
+                emote.title = token;
+                if (customEmotes[token].width) {
+                    emote.style.width = customEmotes[token].width + 'px';
+                }
+                if (customEmotes[token].height) {
+                    emote.style.height = customEmotes[token].height + 'px';
+                }
+                fragmentContainer.appendChild(emote);
+            } else {
+                fragmentContainer.appendChild(document.createTextNode(token));
+            }
+        });
+        return fragmentContainer;
     }
 
     // Функция создания элемента сообщения с обработкой бейджей и смайликов
@@ -98,7 +124,6 @@ document.addEventListener('DOMContentLoaded', async function() {
                     badgeImageSrc = badges[badge._id][badge.version].image_url_1x;
                 }
                 if (badgeImageSrc) {
-                    // Формируем data URL из base64 строки
                     badgeImg.src = "data:image/png;base64," + badgeImageSrc;
                     badgeImg.alt = badge._id;
                     badgeImg.title = badge._id;
@@ -126,10 +151,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         const messageContent = document.createElement('span');
         messageContent.className = 'message-content';
 
-        // Обработка фрагментов сообщения
         if (comment.message.fragments) {
             comment.message.fragments.forEach(fragment => {
                 if (fragment.emoticon) {
+                    // Обработка стандартного Twitch-смайлика
                     const emote = document.createElement('img');
                     emote.className = 'emote';
                     const emoteId = fragment.emoticon.emoticon_id;
@@ -142,23 +167,8 @@ document.addEventListener('DOMContentLoaded', async function() {
                     emote.title = fragment.text;
                     messageContent.appendChild(emote);
                 } else {
-                    // Если текст фрагмента совпадает с именем кастомного эмодзи – выводим картинку
-                    if (customEmotes[fragment.text]) {
-                        const emote = document.createElement('img');
-                        emote.className = 'emote';
-                        emote.src = "data:image/png;base64," + customEmotes[fragment.text].data;
-                        emote.alt = fragment.text;
-                        emote.title = fragment.text;
-                        if (customEmotes[fragment.text].width) {
-                            emote.style.width = customEmotes[fragment.text].width + 'px';
-                        }
-                        if (customEmotes[fragment.text].height) {
-                            emote.style.height = customEmotes[fragment.text].height + 'px';
-                        }
-                        messageContent.appendChild(emote);
-                    } else {
-                        messageContent.appendChild(document.createTextNode(fragment.text));
-                    }
+                    // Обработка текстового фрагмента, в котором могут быть кастомные эмодзи, отделенные пробелами
+                    messageContent.appendChild(processTextFragment(fragment.text));
                 }
             });
         } else {
@@ -176,7 +186,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     let isUserScrolling = false;
     const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
     
-    // Счетчик отображенных сообщений
     let messageIndex = 0;
 
     function manageAutoScroll() {
@@ -188,7 +197,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Обновление сообщений чата: isSeek === true означает полный ререндер (например, при перемотке)
     function updateChatMessages(timeInSeconds, isSeek = false) {
         if (isSeek) {
             chatMessages.innerHTML = '';
@@ -210,7 +218,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Инициализация плеера ВКонтакте
     let player;
     let playerInitialized = false;
     function initVideoPlayer() {
@@ -220,6 +227,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             const iframe = document.getElementById('vk-player');
             player = VK.VideoPlayer(iframe);
+
             player.on(VK.VideoPlayer.Events.INITED, function(state) {
                 console.log('Плеер инициализирован', state);
                 playerInitialized = true;
@@ -232,6 +240,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 isAutoScrolling = true;
                 manageAutoScroll();
             });
+
             player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
                 const jumpThreshold = 5;
                 if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
@@ -243,6 +252,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 }
                 currentVideoTime = state.time;
             });
+
             player.on(VK.VideoPlayer.Events.STARTED, function(state) {
                 isPlaying = true;
             });
@@ -261,7 +271,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    // Функция перемотки видео (по клику на timestamp)
     function seekToTime(seconds) {
         if (playerInitialized) {
             try {
@@ -279,7 +288,6 @@ document.addEventListener('DOMContentLoaded', async function() {
 
     initVideoPlayer();
 
-    // Обработка скролла чата
     chatMessages.addEventListener('scroll', () => {
         isUserScrolling = true;
         const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
@@ -288,7 +296,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         setTimeout(() => { isUserScrolling = false; }, 100);
     });
 
-    // Обработчик клика по timestamp – перематываем видео к указанному времени
     chatMessages.addEventListener('click', (e) => {
         if (e.target.classList.contains('timestamp')) {
             const time = parseFloat(e.target.dataset.time);
@@ -298,7 +305,6 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
-    // Обработчик для кнопки авто-прокрутки
     autoScrollButton.addEventListener('click', () => {
         isAutoScrolling = true;
         updateChatMessages(currentVideoTime, true);

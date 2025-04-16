@@ -179,6 +179,7 @@ body {
     }
     
     .chat-container {
+        position: relative;
         margin-left: 0;
         margin-top: 20px;
         height: 50vh;
@@ -188,7 +189,7 @@ body {
 
 #auto-scroll-button {
     pointer-events: auto;
-    margin-bottom: 20px;         /* Отступ от нижней границы */
+    margin-bottom: 20px;       /* Отступ от нижней границы */
     background-color: rgba(0, 0, 0, 0.7);
     color: #fff;
     border: none;
@@ -197,12 +198,12 @@ body {
     font-size: 14px;
     cursor: pointer;
     z-index: 10;
-    opacity: 0;
+    opacity: 0;              /* Изначально скрыта */
     transition: opacity 0.3s ease;
 }
 
-
-.chat-container:hover #auto-scroll-button,
+/* Видимость кнопки контролируется только классом .show */
 #auto-scroll-button.show {
     opacity: 1;
 }
+
