@@ -207,3 +207,33 @@ body {
     opacity: 1;
 }
 
+/* 1. Container for a stack of emotes */
+.emote-stack {
+    position: relative;            /* establish local stacking context */
+    display: inline-block;         /* hug its contents */
+    vertical-align: middle;        /* align with text */
+    width: auto;                   /* will expand to widest emote */
+    height: auto;                  /* will fit tallest emote */
+  }
+  
+  /* 2. Base emote style inside a stack */
+  .emote-stack img {
+    position: absolute;            /* layer on top of each other */
+    top: 50%;                      /* vertical centering */
+    left: 50%;                     /* horizontal centering */
+    transform: translate(-50%, -50%); /* center transform */
+  }
+  
+  /* 3. Incremental z‑index for each layer */
+  .emote-stack img.layer-0 { z-index: 1; }
+  .emote-stack img.layer-1 { z-index: 2; }
+  /* … as many as needed; can be set dynamically in JS */
+  
+  /* 4. Fallback for regular (non‑overlay) emotes */
+  .emote {
+    position: relative;
+    display: inline-block;
+    margin: 0 2px;
+    vertical-align: middle;
+  }
+
