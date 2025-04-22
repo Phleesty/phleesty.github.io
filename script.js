@@ -1,313 +1,322 @@
 document.addEventListener('DOMContentLoaded', async function() {
-    // Загрузка данных чата из JSON файла
+    // 1. Загрузка JSON
     let chatData;
     try {
-        const response = await fetch('2421184938.json');
-        if (!response.ok) {
-            throw new Error('Не удалось загрузить файл чата.');
-        }
-        chatData = await response.json();
-        console.log("Чат загружен успешно");
-    } catch (error) {
-        console.error("Ошибка загрузки чата:", error);
-        document.getElementById('chat-messages').innerHTML = '<p class="error">Ошибка загрузки чата</p>';
+        const res = await fetch('2421184938.json');
+        if (!res.ok) throw new Error('Не удалось загрузить файл чата.');
+        chatData = await res.json();
+    } catch (e) {
+        console.error('Ошибка загрузки чата:', e);
+        document.getElementById('chat-messages').innerHTML =
+            '<p class="error">Ошибка загрузки чата</p>';
         return;
     }
 
-    // Стандартные Twitch-эмодзи
+    // 2. Стандартные эмодзи и бейджи
     const emoticons = {};
-    if (chatData.emotes) {
-        chatData.emotes.forEach(emote => {
-            emoticons[emote.id] = emote;
-        });
-    }
+    (chatData.emotes||[]).forEach(e => emoticons[e.id] = e);
 
-    // Стандартные бейджи
     const badges = {};
-    if (chatData.badges) {
-        chatData.badges.forEach(badge => {
-            if (!badges[badge._id]) {
-                badges[badge._id] = {};
-            }
-            badges[badge._id][badge.version] = badge;
-        });
-    }
+    (chatData.badges||[]).forEach(b => {
+        if (!badges[b._id]) badges[b._id] = {};
+        badges[b._id][b.version] = b;
+    });
 
-    // Сортировка сообщений по времени (по возрастанию)
-    const sortedComments = chatData.comments.sort((a, b) =>
-        a.content_offset_seconds - b.content_offset_seconds
+    // 3. Сортировка по времени
+    const sortedComments = (chatData.comments||[]).sort(
+        (a,b) => a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // Форматирование времени в формат ЧЧ:ММ:СС
-    function formatTime(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        return `${h > 0 ? h + ':' : ''}${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+    // 4. Форматер времени
+    function formatTime(sec) {
+        const h = Math.floor(sec/3600),
+              m = Math.floor((sec%3600)/60),
+              s = Math.floor(sec%60);
+        return `${h>0? h+':' : ''}${m<10? '0'+m : m}:${s<10? '0'+s : s}`;
     }
 
-    // Построение карты кастомных эмодзи (7TV, BTTV, FFZ) из embeddedData
-    const customEmotes = {};
+    // 5. Кастомные эмодзи и бейджи
+    const customEmotes = {}, customBadges = {};
     if (chatData.embeddedData) {
-        if (chatData.embeddedData.thirdParty) {
-            chatData.embeddedData.thirdParty.forEach(emote => {
-                if (emote.name) {
-                    customEmotes[emote.name] = emote;
-                }
-            });
-        }
-        if (chatData.embeddedData.firstParty) {
-            chatData.embeddedData.firstParty.forEach(emote => {
-                if (emote.id) {
-                    customEmotes[emote.id] = emote;
-                }
-            });
-        }
-    }
-
-    // Построение карты кастомных бейджей из embeddedData.twitchBadges
-    const customBadges = {};
-    if (chatData.embeddedData && chatData.embeddedData.twitchBadges) {
-        chatData.embeddedData.twitchBadges.forEach(badge => {
-            customBadges[badge.name] = badge;
+        (chatData.embeddedData.thirdParty||[]).forEach(e => {
+            if (e.name) customEmotes[e.name] = e;
+        });
+        (chatData.embeddedData.firstParty||[]).forEach(e => {
+            if (e.id) customEmotes[e.id] = e;
+        });
+        (chatData.embeddedData.twitchBadges||[]).forEach(b => {
+            customBadges[b.name] = b;
         });
     }
 
-    // Функция для обработки текстового фрагмента с возможной заменой кастомного эмодзи
-    function processTextFragment(text) {
-        const fragmentContainer = document.createDocumentFragment();
-        // Разбиваем строку, сохраняя пробелы
-        const tokens = text.split(/(\s+)/);
-        tokens.forEach(token => {
-            if (customEmotes.hasOwnProperty(token)) { // строгое сравнение, регистр важен
-                const emote = document.createElement('img');
-                emote.className = 'emote';
-                emote.src = "data:image/png;base64," + customEmotes[token].data;
-                emote.alt = token;
-                emote.title = token;
-                if (customEmotes[token].width) {
-                    emote.style.width = customEmotes[token].width + 'px';
-                }
-                if (customEmotes[token].height) {
-                    emote.style.height = customEmotes[token].height + 'px';
-                }
-                fragmentContainer.appendChild(emote);
+    // 6. Утилита для создания <img>
+    function createImg({src, alt, title, width, height, zero, cls}) {
+        const img = document.createElement('img');
+        img.className = cls || 'emote';
+        img.src       = src;
+        img.alt       = alt;
+        img.title     = title;
+        if (width)    img.style.width  = width  + 'px';
+        if (height)   img.style.height = height + 'px';
+        img.dataset.zero = zero ? '1' : '0';
+        img.style.verticalAlign = 'middle';
+        return img;
+    }
+
+    // 7. Стандартный и кастомный эмодзи
+    function createStandardEmote(frag) {
+        const id  = frag.emoticon.emoticon_id;
+        const url = emoticons[id]?.url ||
+                    `https://static-cdn.jtvnw.net/emoticons/v1/${id}/1.0`;
+        // НЕ задаём width/height — используем естественный размер
+        return createImg({
+            cls: 'emote',
+            src: url,
+            alt: frag.text,
+            title: frag.text,
+            zero: false
+        });
+    }
+    function createCustomEmote(name) {
+        const d = customEmotes[name];
+        return createImg({
+            cls: 'emote',
+            src: 'data:image/png;base64,' + d.data,
+            alt: name,
+            title: name,
+            width: d.width,
+            height: d.height,
+            zero: d.isZeroWidth
+        });
+    }
+
+    // 8. Рендер overlay-стека
+    function renderEmoteStack(stack) {
+        let maxW = 0, maxH = 0;
+        stack.forEach(tok => {
+            const el = tok.element;
+            const w = el.style.width  ? parseInt(el.style.width)  : el.width;
+            const h = el.style.height ? parseInt(el.style.height) : el.height;
+            if (w > maxW) maxW = w;
+            if (h > maxH) maxH = h;
+        });
+        const wrap = document.createElement('span');
+        wrap.className = 'emote-stack';
+        wrap.style.display       = 'inline-block';
+        wrap.style.position      = 'relative';
+        wrap.style.width         = maxW + 'px';
+        wrap.style.height        = maxH + 'px';
+        wrap.style.verticalAlign = 'middle';
+        wrap.style.marginLeft    = '0.2em';
+        stack.forEach((tok, i) => {
+            const img = tok.element.cloneNode();
+            img.style.position  = 'absolute';
+            img.style.top       = '50%';
+            img.style.left      = '50%';
+            img.style.transform = 'translate(-50%,-50%)';
+            img.style.zIndex    = 100 + i;
+            wrap.appendChild(img);
+        });
+        return wrap;
+    }
+
+    // 9. Обработка одного сообщения
+    function processMessage(c) {
+        const div = document.createElement('div');
+        div.className = 'chat-message';
+        div.dataset.time = c.content_offset_seconds;
+
+        // timestamp
+        const ts = document.createElement('span');
+        ts.className = 'timestamp';
+        ts.textContent = formatTime(c.content_offset_seconds);
+        ts.dataset.time = c.content_offset_seconds;
+        div.appendChild(ts);
+
+        // бейджи
+        (c.message.user_badges||[]).forEach(b => {
+            let src = null;
+            if (customBadges[b._id]?.versions[b.version]) {
+                src = 'data:image/png;base64,' +
+                      customBadges[b._id].versions[b.version].bytes;
+            } else if (badges[b._id]?.[b.version]) {
+                src = badges[b._id][b.version].image_url_1x;
+            }
+            if (!src) return;
+            const img = createImg({
+                cls: 'badge',
+                src, alt: b._id, title: b._id,
+                width: 18, height: 18,
+                zero: false
+            });
+            div.appendChild(img);
+        });
+
+        // username
+        const un = document.createElement('span');
+        un.className = 'username';
+        un.textContent = c.commenter.display_name;
+        if (c.message.user_color) un.style.color = c.message.user_color;
+        div.appendChild(un);
+        div.appendChild(document.createTextNode(': '));
+
+        // собираем токены
+        const tokens = [];
+        (c.message.fragments||[]).forEach(frag => {
+            if (frag.emoticon) {
+                tokens.push({
+                    type: 'emote',
+                    element: createStandardEmote(frag),
+                    isZero: false
+                });
             } else {
-                fragmentContainer.appendChild(document.createTextNode(token));
+                frag.text.split(/(\s+)/).forEach(part => {
+                    if (/^\s+$/.test(part)) {
+                        tokens.push({ type: 'space', text: part });
+                    } else if (customEmotes[part]) {
+                        const el = createCustomEmote(part);
+                        tokens.push({
+                            type: 'emote',
+                            element: el,
+                            isZero: el.dataset.zero === '1'
+                        });
+                    } else {
+                        tokens.push({ type: 'text', text: part });
+                    }
+                });
             }
         });
-        return fragmentContainer;
-    }
 
-    // Функция создания элемента сообщения с обработкой бейджей и смайликов
-    function processMessage(comment) {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'chat-message';
-        messageDiv.dataset.time = comment.content_offset_seconds;
-
-        // Элемент времени (timestamp) – клик по нему перематывает видео
-        const timestamp = document.createElement('span');
-        timestamp.className = 'timestamp';
-        timestamp.textContent = formatTime(comment.content_offset_seconds);
-        timestamp.dataset.time = comment.content_offset_seconds;
-        messageDiv.appendChild(timestamp);
-
-        // Обработка бейджей пользователя
-        if (comment.message.user_badges && comment.message.user_badges.length > 0) {
-            comment.message.user_badges.forEach(badge => {
-                const badgeImg = document.createElement('img');
-                badgeImg.className = 'badge';
-                let badgeImageSrc = null;
-                if (customBadges[badge._id] && customBadges[badge._id].versions[badge.version]) {
-                    badgeImageSrc = customBadges[badge._id].versions[badge.version].bytes;
-                } else if (badges[badge._id] && badges[badge._id][badge.version]) {
-                    badgeImageSrc = badges[badge._id][badge.version].image_url_1x;
+        // формируем финальные узлы
+        const out = [];
+        tokens.forEach(tok => {
+            if (tok.type === 'emote' && tok.isZero) {
+                // ищем назад последний эмодзи или стек
+                let j = out.length - 1;
+                while (j >= 0 &&
+                      out[j].nodeType === 3 &&
+                      /^\s*$/.test(out[j].textContent)) {
+                    j--;
                 }
-                if (badgeImageSrc) {
-                    badgeImg.src = "data:image/png;base64," + badgeImageSrc;
-                    badgeImg.alt = badge._id;
-                    badgeImg.title = badge._id;
-                    badgeImg.width = 18;
-                    badgeImg.height = 18;
-                    messageDiv.appendChild(badgeImg);
-                }
-            });
-        }
-
-        // Имя пользователя
-        const username = document.createElement('span');
-        username.className = 'username';
-        username.textContent = comment.commenter.display_name;
-        if (comment.message.user_color) {
-            username.style.color = comment.message.user_color;
-        }
-        messageDiv.appendChild(username);
-
-        const colon = document.createElement('span');
-        colon.textContent = ': ';
-        messageDiv.appendChild(colon);
-
-        // Контейнер для текста сообщения
-        const messageContent = document.createElement('span');
-        messageContent.className = 'message-content';
-
-        if (comment.message.fragments) {
-            comment.message.fragments.forEach(fragment => {
-                if (fragment.emoticon) {
-                    // Обработка стандартного Twitch-смайлика
-                    const emote = document.createElement('img');
-                    emote.className = 'emote';
-                    const emoteId = fragment.emoticon.emoticon_id;
-                    if (emoticons[emoteId]) {
-                        emote.src = emoticons[emoteId].url || `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
-                    } else {
-                        emote.src = `https://static-cdn.jtvnw.net/emoticons/v1/${emoteId}/1.0`;
+                if (j >= 0) {
+                    const prev = out[j];
+                    if (
+                        prev.nodeType === 1 &&
+                        (prev.classList.contains('emote') ||
+                         prev.classList.contains('emote-stack'))
+                    ) {
+                        out.splice(j, 1);
+                        let baseElems;
+                        if (prev.classList.contains('emote-stack')) {
+                            baseElems = Array.from(prev.children).map(el => ({ element: el }));
+                        } else {
+                            baseElems = [{ element: prev }];
+                        }
+                        const newStack = baseElems.concat({ element: tok.element });
+                        out.splice(j, 0, renderEmoteStack(newStack));
+                        return;
                     }
-                    emote.alt = fragment.text;
-                    emote.title = fragment.text;
-                    messageContent.appendChild(emote);
-                } else {
-                    // Обработка текстового фрагмента, в котором могут быть кастомные эмодзи, отделенные пробелами
-                    messageContent.appendChild(processTextFragment(fragment.text));
                 }
-            });
-        } else {
-            messageContent.textContent = comment.message.body;
-        }
-        messageDiv.appendChild(messageContent);
-        return messageDiv;
+            }
+            if (tok.type === 'emote') {
+                out.push(tok.element);
+            } else {
+                // text or space
+                out.push(document.createTextNode(tok.text));
+            }
+        });
+
+        // собираем в DOM
+        const content = document.createElement('span');
+        content.className = 'message-content';
+        out.forEach(node => content.appendChild(node));
+        div.appendChild(content);
+        return div;
     }
 
-    let currentVideoTime = 0;
-    let isPlaying = false;
-    let isAutoScrolling = true;
-    const autoScrollButton = document.getElementById('auto-scroll-button');
-    const chatMessages = document.getElementById('chat-messages');
-    let isUserScrolling = false;
-    const lastMessageTime = sortedComments.length ? sortedComments[sortedComments.length - 1].content_offset_seconds : 0;
-    
-    let messageIndex = 0;
+    // 10. VideoPlayer + автоскролл
+    const chatEl = document.getElementById('chat-messages');
+    const autoBtn = document.getElementById('auto-scroll-button');
+    let idx = 0, curTime = 0, autoOn = true, playerInited = false, player;
 
-    function manageAutoScroll() {
-        if (isAutoScrolling) {
-            autoScrollButton.classList.remove('show');
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+    function manageScroll() {
+        if (autoOn) {
+            autoBtn.classList.remove('show');
+            chatEl.scrollTop = chatEl.scrollHeight;
         } else {
-            autoScrollButton.classList.add('show');
+            autoBtn.classList.add('show');
         }
     }
 
-    function updateChatMessages(timeInSeconds, isSeek = false) {
-        if (isSeek) {
-            chatMessages.innerHTML = '';
-            let newIndex = sortedComments.findIndex(comment => comment.content_offset_seconds > timeInSeconds);
-            if (newIndex === -1) newIndex = sortedComments.length;
-            messageIndex = newIndex;
-            for (let i = 0; i < messageIndex; i++) {
-                chatMessages.appendChild(processMessage(sortedComments[i]));
+    function update(time, seek=false) {
+        if (seek) {
+            chatEl.innerHTML = '';
+            idx = sortedComments.findIndex(x => x.content_offset_seconds > time);
+            if (idx < 0) idx = sortedComments.length;
+            for (let i = 0; i < idx; i++) {
+                chatEl.appendChild(processMessage(sortedComments[i]));
             }
         } else {
-            while (messageIndex < sortedComments.length &&
-                   sortedComments[messageIndex].content_offset_seconds <= timeInSeconds) {
-                chatMessages.appendChild(processMessage(sortedComments[messageIndex]));
-                messageIndex++;
+            while (
+                idx < sortedComments.length &&
+                sortedComments[idx].content_offset_seconds <= time
+            ) {
+                chatEl.appendChild(processMessage(sortedComments[idx]));
+                idx++;
             }
         }
-        if (isAutoScrolling) {
-            manageAutoScroll();
-        }
+        if (autoOn) manageScroll();
     }
 
-    let player;
-    let playerInitialized = false;
-    function initVideoPlayer() {
-        try {
-            if (typeof VK === 'undefined') {
-                throw new Error('API ВКонтакте не загрузилось.');
+    function initVK() {
+        if (typeof VK === 'undefined') {
+            console.error('VK API отсутствует');
+            return;
+        }
+        player = VK.VideoPlayer(document.getElementById('vk-player'));
+        player.on(VK.VideoPlayer.Events.INITED, () => {
+            playerInited = true;
+            try { player.play(); } catch {}
+            update(player.getCurrentTime(), true);
+            manageScroll();
+        });
+        player.on(VK.VideoPlayer.Events.TIMEUPDATE, st => {
+            const t = st.time;
+            if (Math.abs(t - curTime) > 5) {
+                autoOn = true;
+                update(t, true);
+            } else {
+                update(t, false);
             }
-            const iframe = document.getElementById('vk-player');
-            player = VK.VideoPlayer(iframe);
-
-            player.on(VK.VideoPlayer.Events.INITED, function(state) {
-                console.log('Плеер инициализирован', state);
-                playerInitialized = true;
-                try {
-                    player.play();
-                } catch (e) {
-                    console.warn('Автозапуск не удался:', e);
-                }
-                updateChatMessages(player.getCurrentTime(), true);
-                isAutoScrolling = true;
-                manageAutoScroll();
-            });
-
-            player.on(VK.VideoPlayer.Events.TIMEUPDATE, function(state) {
-                const jumpThreshold = 5;
-                if (Math.abs(state.time - currentVideoTime) > jumpThreshold) {
-                    isAutoScrolling = true;
-                    isUserScrolling = false;
-                    updateChatMessages(state.time, true);
-                } else {
-                    updateChatMessages(state.time, false);
-                }
-                currentVideoTime = state.time;
-            });
-
-            player.on(VK.VideoPlayer.Events.STARTED, function(state) {
-                isPlaying = true;
-            });
-            player.on(VK.VideoPlayer.Events.PAUSED, function(state) {
-                isPlaying = false;
-            });
-            player.on(VK.VideoPlayer.Events.RESUMED, function(state) {
-                isPlaying = true;
-            });
-            player.on(VK.VideoPlayer.Events.ERROR, function(state) {
-                console.error('Ошибка воспроизведения', state);
-            });
-        } catch (error) {
-            console.error('Ошибка инициализации плеера:', error);
-            chatMessages.innerHTML = '<p class="error">Не удалось загрузить плеер ВКонтакте.</p>';
-        }
+            curTime = t;
+        });
+        player.on(VK.VideoPlayer.Events.ERROR, e => console.error(e));
     }
 
-    function seekToTime(seconds) {
-        if (playerInitialized) {
-            try {
-                player.seek(seconds);
-                currentVideoTime = seconds;
-                isUserScrolling = false;
-                isAutoScrolling = true;
-                updateChatMessages(seconds, true);
-                manageAutoScroll();
-            } catch (error) {
-                console.error('Ошибка при перемотке видео:', error);
-            }
-        }
+    function seekTo(sec) {
+        if (!playerInited) return;
+        player.seek(sec);
+        curTime = sec;
+        autoOn = true;
+        update(sec, true);
+        manageScroll();
     }
 
-    initVideoPlayer();
-
-    chatMessages.addEventListener('scroll', () => {
-        isUserScrolling = true;
-        const isAtBottom = chatMessages.scrollHeight - chatMessages.scrollTop - chatMessages.clientHeight < 1;
-        isAutoScrolling = isAtBottom;
-        manageAutoScroll();
-        setTimeout(() => { isUserScrolling = false; }, 100);
+    initVK();
+    chatEl.addEventListener('scroll', () => {
+        autoOn =
+            chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 1;
+        manageScroll();
     });
-
-    chatMessages.addEventListener('click', (e) => {
+    chatEl.addEventListener('click', e => {
         if (e.target.classList.contains('timestamp')) {
-            const time = parseFloat(e.target.dataset.time);
-            if (!isNaN(time)) {
-                seekToTime(time);
-            }
+            const t = parseFloat(e.target.dataset.time);
+            if (!isNaN(t)) seekTo(t);
         }
     });
-
-    autoScrollButton.addEventListener('click', () => {
-        isAutoScrolling = true;
-        updateChatMessages(currentVideoTime, true);
-        manageAutoScroll();
+    autoBtn.addEventListener('click', () => {
+        autoOn = true;
+        update(curTime, true);
+        manageScroll();
     });
 });

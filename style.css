@@ -5,7 +5,8 @@
 }
 
 body {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-family: "Inter", "Roobert", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-base: "Inter","Roobert","Helvetica Neue",Helvetica,Arial,sans-serif;
     background-color: #0e0e10;
     color: #efeff1;
 }
@@ -120,7 +121,6 @@ body {
 
 .chat-message .username {
     font-weight: bold;
-    margin-right: 5px;
 }
 
 .chat-message .message-content {
@@ -207,7 +207,7 @@ body {
     opacity: 1;
 }
 
-.emote-group {
+.emote-stack {
     display: inline-block;
     position: relative;
     vertical-align: middle;
@@ -221,14 +221,14 @@ body {
 .emote {
     vertical-align: middle;
     display: inline-block;
-    image-rendering: pixelated;
     pointer-events: none;
 }
 
-.emote-group .emote {
+.emote-stack .emote {
     position: absolute;
     top: 50%;
-    transform: translateY(-50%);
+    left: 50%;
+    transform: translate(-50%, -50%);
     pointer-events: auto;
 }
 
