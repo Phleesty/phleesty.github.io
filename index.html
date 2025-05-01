@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Twitch VOD с чатом</title>
+    <link rel="stylesheet" href="local-fonts.css">
     <link rel="stylesheet" href="style.css">
     <!-- Подключаем API видеоплеера ВКонтакте -->
     <script src="/js/videoplayer.js"></script>
@@ -22,10 +23,12 @@
         </div>
         <div class="chat-container">
             <div class="chat-header">
-                <h3>Чат трансляции</h3>
+                <h4>ЧАТ ТРАНСЛЯЦИИ</h4>
             </div>
             <div id="chat-container">
-                <button id="auto-scroll-button">Возобновить автопрокрутку</button>
+                <button id="auto-scroll-button">
+                    <div class="auto-scroll-button-text">Чат остановлен из-за прокрутки</div>
+                </button>
             </div>
             <div id="chat-messages"></div>
         </div>

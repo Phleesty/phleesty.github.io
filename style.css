@@ -8,13 +8,30 @@ body {
     font-family: "Inter", "Roobert", "Helvetica Neue", Helvetica, Arial, sans-serif;
     background-color: #0e0e10;
     color: #efeff1;
+
+
+    /* font-feature-settings: normal;
+font-kerning: auto;
+font-optical-sizing: auto;
+font-size: 13px;
+font-size-adjust: none;
+font-stretch: 100%;
+font-style: normal;
+font-variant-alternates: normal;
+font-variant-caps: normal;
+font-variant-east-asian: normal;
+font-variant-emoji: normal;
+font-variant-ligatures: normal;
+font-variant-numeric: normal;
+font-variant-position: normal;
+font-variation-settings: normal;
+font-weight: 400; */
 }
 
 .container {
     display: flex;
     width: 100%;
     height: 100vh;
-    padding: 20px;
 }
 
 .video-container {
@@ -30,15 +47,16 @@ body {
 
 .chat-container {
     position: relative;
-    flex: 2.6;
+    /* flex: 2.6; */
     background-color: #18181b;
     display: flex;
     flex-direction: column;
-
     height: 100%;
     overflow: hidden;
-    min-width: 340px;
+    /* min-width: 340px; */
+    width: 340px;
     border-left: 1px solid #2d2d32;
+    font-size: 13px;
 }
 
 #chat-container {
@@ -51,10 +69,16 @@ body {
     pointer-events: none;    /* Чтобы клики проходили через, за исключением кнопки */
 }
 
+h4 {
+    line-height: 2;
+    font-weight: 600 !important; 
+}
+
 .chat-header {
+
+    color: rgb(222, 222, 227);
     padding: 10px 15px;
-    font-size: small;
-    background-color: #1f1f23;
+    font-size: .8rem;
     border-bottom: 1px solid #2d2d32;
     display: flex;
     align-items: center;
@@ -81,17 +105,22 @@ body {
     background-color: #772ce8;
 }
 
+#chat-messages-wrapper {
+    display: flex;
+    flex-direction: column;
+    height: 100%;           /* чтобы wrapper занимал всю высоту */
+}
+
+/* Чат: блочный, скролл внутри, прижат к низу через margin-top */
 #chat-messages {
-    display: flex; /* Отказ от flex для нормального поведения скролла */
-    flex-direction: column-reverse;
-    vertical-align: baseline;
-    flex: 1;
-    overflow-y: auto;
-    /* Для Firefox: задаём цвет скроллбара и тонкую ширину */
+    display: block;         /* обычный блочный контейнер */
+    margin-top: auto;       /* «спейсер» для прижатия вниз */
+    overflow-y: auto;       /* скролл по переполнению */
+    padding-bottom: 3rem;
+    /* Firefox */
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.3) transparent;
 }
-
 /* Стили для Webkit-браузеров */
 #chat-messages::-webkit-scrollbar {
     width: 4px;
@@ -110,11 +139,39 @@ body {
     opacity: 1;
 }
 
+
+/* Упоминания @nickname — semibold (600) */
+.chat-mention {
+    font-weight: 700;
+    color: #efeff1;
+  }
+  
+  /* Ссылки в чате */
+  .chat-link {
+    color: #bf94ff;
+    text-decoration: none;
+  }
+  .chat-link:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 0.3rem;
+    text-decoration: underline;
+  }
+  
+
+
+
 .chat-message {
-    padding: 4px 0;
-    line-height: 20px;
+    padding: .30rem 0; 
+    /* В оригинале  padding: .50rem 0; у нас .25 */
+    line-height: 1.25rem;
     word-wrap: break-word;
     transition: background-color 0.1s;
+    padding-inline-start: .3rem;
+    word-break: break-word;
+    display: flex;
+    width: 100%;
+    align-items: baseline;
+    flex-wrap: nowrap;
 }
 
 .chat-message:hover {
@@ -122,29 +179,70 @@ body {
 }
 
 .chat-message .timestamp {
-    color: #737579;
-    font-size: 12px;
-    margin-right: 5px;
+    color: rgb(222, 222, 227);
+    font-size: .75rem;
+    line-height: 1.2rem;
+    padding-left: 0.2rem;
+    padding-right: 0.2rem;
+    margin-right: 0.3rem;
+    flex-shrink: 0;
+    display: inline-block;
+    align-items: baseline;
+    border-radius: 3px;
+}
+
+.chat-message .timestamp:hover {
+    background-color: rgba(83, 83, 95, 0.48);
+    cursor: pointer;
+}
+
+.message-container {
+    display: inline;
+    flex-wrap: nowrap;
+    align-items: baseline;
+
+}
+
+.badges-container {
+    display: inline-block;
+    align-items: center;
+    vertical-align: baseline;
+    height: 18px;
+    padding-bottom: 1.35rem;
+}
+
+.chat-message .badge {
+    display: inline;
+    margin: 0 .15rem 0rem 0;
+    /* margin: 0 .3rem .2rem 0; - в оригинале именно так, мы делаем размер height: 18px в .badges-container, а можем оставить .2rem (у нас будет другое) */
+    vertical-align: middle;
 }
 
 .chat-message .username {
-    font-weight: bold;
+    font-weight: 700;
+    list-style-position: inside;
+    list-style-type: none;
+    display: inline;
+    text-decoration-line: none;
+    vertical-align: baseline;
+    flex-wrap: nowrap;
+}
+
+.chat-message .username-separator {
+    color: #efeff1;
+    vertical-align: baseline;
 }
 
 .chat-message .message-content {
     color: #efeff1;
     word-wrap: break-word;
-}
-
-.chat-message .badge {
-    display: inline-block;
-    margin-right: 3px;
-    vertical-align: middle;
+    display: inline;
+    vertical-align: baseline;
 }
 
 .chat-message .emote {
     display: inline-block;
-    vertical-align: middle;
+    vertical-align: baseline;
 }
 
 /* Кастомный скроллбар для чата */
@@ -191,22 +289,41 @@ body {
 #auto-scroll-button {
     pointer-events: auto;
     margin-bottom: 20px;       /* Отступ от нижней границы */
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.6);
     color: #fff;
     border: none;
     border-radius: 5px;
-    padding: 6px 12px;
-    font-size: 14px;
+
+    font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
-    z-index: 10;
+    z-index: 999;
     opacity: 0;              /* Изначально скрыта */
     transition: opacity 0.3s ease;
+    align-items: center;
+    pointer-events: none;
+}
+
+.auto-scroll-button-text {
+    border: none;
+    border-radius: 5px;
+    padding: .6rem .8rem;
+}
+
+.auto-scroll-button-text:hover {
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 /* Видимость кнопки контролируется только классом .show */
 #auto-scroll-button.show {
     opacity: 1;
+    pointer-events: auto;
 }
+
+/* #auto-scroll-button:hover {
+    background-color: rgba(255, 255, 255, 0.13);
+    color: fffff;
+} */
 
 .emote-stack {
     display: inline-block;
@@ -223,6 +340,7 @@ body {
     vertical-align: middle;
     display: inline-block;
     pointer-events: none;
+    margin: -0.25rem 0;
 }
 
 .emote-stack .emote {

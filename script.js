@@ -1,5 +1,24 @@
 document.addEventListener('DOMContentLoaded', async function() {
+    // —————————————————————————————————————————
+    // 0. Обёртка #chat-messages в flex-контейнер
+    // —————————————————————————————————————————
+    const originalChatEl = document.getElementById('chat-messages');
+    if (originalChatEl) {
+        const chatWrapper = document.createElement('div');
+        chatWrapper.id = 'chat-messages-wrapper';
+        Object.assign(chatWrapper.style, {
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+        });
+        const parent = originalChatEl.parentNode;
+        parent.replaceChild(chatWrapper, originalChatEl);
+        chatWrapper.appendChild(originalChatEl);
+    }
+
+    // —————————————————————————————————————————
     // 1. Загрузка JSON
+    // —————————————————————————————————————————
     let chatData;
     try {
         const res = await fetch('2421184938.json');
@@ -12,70 +31,83 @@ document.addEventListener('DOMContentLoaded', async function() {
         return;
     }
 
+    // —————————————————————————————————————————
     // 2. Стандартные эмодзи и бейджи
+    // —————————————————————————————————————————
     const emoticons = {};
-    (chatData.emotes||[]).forEach(e => emoticons[e.id] = e);
+    (chatData.emotes || []).forEach(e => emoticons[e.id] = e);
 
     const badges = {};
-    (chatData.badges||[]).forEach(b => {
-        if (!badges[b._id]) badges[b._id] = {};
+    (chatData.badges || []).forEach(b => {
+        badges[b._id] = badges[b._id] || {};
         badges[b._id][b.version] = b;
     });
 
+    // —————————————————————————————————————————
     // 3. Сортировка по времени
-    const sortedComments = (chatData.comments||[]).sort(
-        (a,b) => a.content_offset_seconds - b.content_offset_seconds
+    // —————————————————————————————————————————
+    const sortedComments = (chatData.comments || []).sort(
+        (a, b) => a.content_offset_seconds - b.content_offset_seconds
     );
 
-    // 4. Форматер времени
+    // —————————————————————————————————————————
+    // 4. Форматер времени (без ведущего нуля у минут, поддержка часов)
+    // —————————————————————————————————————————
     function formatTime(sec) {
-        const h = Math.floor(sec/3600),
-              m = Math.floor((sec%3600)/60),
-              s = Math.floor(sec%60);
-        return `${h>0? h+':' : ''}${m<10? '0'+m : m}:${s<10? '0'+s : s}`;
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        const secStr = s < 10 ? '0' + s : String(s);
+
+        if (h > 0) {
+            const minStr = m < 10 ? '0' + m : String(m);
+            return `${h}:${minStr}:${secStr}`;
+        } else {
+            // без ведущего нуля у минут
+            return `${m}:${secStr}`;
+        }
     }
 
+    // —————————————————————————————————————————
     // 5. Кастомные эмодзи и бейджи
+    // —————————————————————————————————————————
     const customEmotes = {}, customBadges = {};
     if (chatData.embeddedData) {
-        (chatData.embeddedData.thirdParty||[]).forEach(e => {
+        (chatData.embeddedData.thirdParty || []).forEach(e => {
             if (e.name) customEmotes[e.name] = e;
         });
-        (chatData.embeddedData.firstParty||[]).forEach(e => {
+        (chatData.embeddedData.firstParty || []).forEach(e => {
             if (e.id) customEmotes[e.id] = e;
         });
-        (chatData.embeddedData.twitchBadges||[]).forEach(b => {
+        (chatData.embeddedData.twitchBadges || []).forEach(b => {
             customBadges[b.name] = b;
         });
     }
 
+    // —————————————————————————————————————————
     // 6. Утилита для создания <img>
-    function createImg({src, alt, title, width, height, zero, cls}) {
+    // —————————————————————————————————————————
+    function createImg({ src, alt, title, width, height, zero, cls }) {
         const img = document.createElement('img');
         img.className = cls || 'emote';
-        img.src       = src;
-        img.alt       = alt;
-        img.title     = title;
-        if (width)    img.style.width  = width  + 'px';
-        if (height)   img.style.height = height + 'px';
+        img.src = src;
+        img.alt = alt;
+        img.title = title;
+        if (width) img.style.width = width + 'px';
+        if (height) img.style.height = height + 'px';
         img.dataset.zero = zero ? '1' : '0';
         img.style.verticalAlign = 'middle';
         return img;
     }
 
+    // —————————————————————————————————————————
     // 7. Стандартный и кастомный эмодзи
+    // —————————————————————————————————————————
     function createStandardEmote(frag) {
-        const id  = frag.emoticon.emoticon_id;
+        const id = frag.emoticon.emoticon_id;
         const url = emoticons[id]?.url ||
                     `https://static-cdn.jtvnw.net/emoticons/v1/${id}/1.0`;
-        // НЕ задаём width/height — используем естественный размер
-        return createImg({
-            cls: 'emote',
-            src: url,
-            alt: frag.text,
-            title: frag.text,
-            zero: false
-        });
+        return createImg({ cls: 'emote', src: url, alt: frag.text, title: frag.text, zero: false });
     }
     function createCustomEmote(name) {
         const d = customEmotes[name];
@@ -90,151 +122,180 @@ document.addEventListener('DOMContentLoaded', async function() {
         });
     }
 
+    // —————————————————————————————————————————
+    // Новые утилиты для упоминаний и ссылок
+    // —————————————————————————————————————————
+    function createMention(text) {
+        const el = document.createElement('strong');
+        el.className = 'chat-mention';
+        el.textContent = text;
+        return el;
+    }
+
+    function createLink(url, text) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.className = 'chat-link';
+        a.textContent = text;
+        return a;
+    }
+
+    // —————————————————————————————————————————
     // 8. Рендер overlay-стека
+    // —————————————————————————————————————————
     function renderEmoteStack(stack) {
         let maxW = 0, maxH = 0;
         stack.forEach(tok => {
             const el = tok.element;
-            const w = el.style.width  ? parseInt(el.style.width)  : el.width;
+            const w = el.style.width ? parseInt(el.style.width) : el.width;
             const h = el.style.height ? parseInt(el.style.height) : el.height;
-            if (w > maxW) maxW = w;
-            if (h > maxH) maxH = h;
+            maxW = Math.max(maxW, w);
+            maxH = Math.max(maxH, h);
         });
         const wrap = document.createElement('span');
         wrap.className = 'emote-stack';
-        wrap.style.display       = 'inline-block';
-        wrap.style.position      = 'relative';
-        wrap.style.width         = maxW + 'px';
-        wrap.style.height        = maxH + 'px';
-        wrap.style.verticalAlign = 'middle';
-        wrap.style.marginLeft    = '0.2em';
+        Object.assign(wrap.style, {
+            display: 'inline-block',
+            position: 'relative',
+            width: maxW + 'px',
+            height: maxH + 'px',
+            verticalAlign: 'middle',
+            marginLeft: '0.2em'
+        });
         stack.forEach((tok, i) => {
             const img = tok.element.cloneNode();
-            img.style.position  = 'absolute';
-            img.style.top       = '50%';
-            img.style.left      = '50%';
-            img.style.transform = 'translate(-50%,-50%)';
-            img.style.zIndex    = 100 + i;
+            Object.assign(img.style, {
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%,-50%)',
+                zIndex: 100 + i
+            });
             wrap.appendChild(img);
         });
         return wrap;
     }
 
+    // —————————————————————————————————————————
     // 9. Обработка одного сообщения
+    // —————————————————————————————————————————
     function processMessage(c) {
         const div = document.createElement('div');
         div.className = 'chat-message';
         div.dataset.time = c.content_offset_seconds;
 
         // timestamp
-        const ts = document.createElement('span');
-        ts.className = 'timestamp';
-        ts.textContent = formatTime(c.content_offset_seconds);
-        ts.dataset.time = c.content_offset_seconds;
-        div.appendChild(ts);
+        const timestampDiv = document.createElement('div');
+        timestampDiv.className = 'timestamp';
+        timestampDiv.textContent = formatTime(c.content_offset_seconds);
+        timestampDiv.dataset.time = c.content_offset_seconds;
+        div.appendChild(timestampDiv);
 
-        // бейджи
-        (c.message.user_badges||[]).forEach(b => {
-            let src = null;
-            if (customBadges[b._id]?.versions[b.version]) {
-                src = 'data:image/png;base64,' +
-                      customBadges[b._id].versions[b.version].bytes;
-            } else if (badges[b._id]?.[b.version]) {
-                src = badges[b._id][b.version].image_url_1x;
-            }
+        // badges + username + content
+        const msgContainer = document.createElement('div');
+        msgContainer.className = 'message-container';
+        div.appendChild(msgContainer);
+
+        const badgesContainer = document.createElement('div');
+        badgesContainer.className = 'badges-container';
+        msgContainer.appendChild(badgesContainer);
+        (c.message.user_badges || []).forEach(b => {
+            let src = customBadges[b._id]?.versions[b.version]
+                    ? 'data:image/png;base64,' + customBadges[b._id].versions[b.version].bytes
+                    : badges[b._id]?.[b.version]?.image_url_1x;
             if (!src) return;
-            const img = createImg({
-                cls: 'badge',
-                src, alt: b._id, title: b._id,
-                width: 18, height: 18,
-                zero: false
-            });
-            div.appendChild(img);
+            badgesContainer.appendChild(createImg({
+                cls: 'badge', src, alt: b._id, title: b._id, width: 18, height: 18, zero: false
+            }));
         });
 
-        // username
-        const un = document.createElement('span');
-        un.className = 'username';
-        un.textContent = c.commenter.display_name;
-        if (c.message.user_color) un.style.color = c.message.user_color;
-        div.appendChild(un);
-        div.appendChild(document.createTextNode(': '));
+        const usernameDiv = document.createElement('span');
+        usernameDiv.className = 'username';
+        usernameDiv.textContent = c.commenter.display_name;
+        if (c.message.user_color) usernameDiv.style.color = c.message.user_color;
+        msgContainer.appendChild(usernameDiv);
 
-        // собираем токены
+        const separator = document.createElement('span');
+        separator.className = 'username-separator';
+        separator.textContent = ': ';
+        msgContainer.appendChild(separator);
+
+        // fragments → tokens → nodes
         const tokens = [];
-        (c.message.fragments||[]).forEach(frag => {
+        (c.message.fragments || []).forEach(frag => {
             if (frag.emoticon) {
-                tokens.push({
-                    type: 'emote',
-                    element: createStandardEmote(frag),
-                    isZero: false
-                });
+                tokens.push({ type: 'emote', element: createStandardEmote(frag), isZero: false });
             } else {
                 frag.text.split(/(\s+)/).forEach(part => {
                     if (/^\s+$/.test(part)) {
                         tokens.push({ type: 'space', text: part });
-                    } else if (customEmotes[part]) {
-                        const el = createCustomEmote(part);
-                        tokens.push({
-                            type: 'emote',
-                            element: el,
-                            isZero: el.dataset.zero === '1'
-                        });
                     } else {
-                        tokens.push({ type: 'text', text: part });
+                        // проверка на ссылку
+                        const urlMatch = part.match(/https?:\/\/[^\s]+/);
+                        if (urlMatch) {
+                        const rawUrl = urlMatch[0];
+                        // отрезаем любую конечную пунктуацию (.,!?;:) у URL
+                        const cleanUrl = rawUrl.replace(/[.,!?;:]+$/, '');
+                        // то, что было после первого пробела или сразу за URL
+                        const after = part.slice(rawUrl.length);
+                        // то, что мы отрезали (точки/запятые и т.п.) плюс остальной текст
+                        const suffix = rawUrl.slice(cleanUrl.length) + after;
+
+                        tokens.push({ type: 'element', element: createLink(cleanUrl, cleanUrl) });
+                        if (suffix) tokens.push({ type: 'text', text: suffix });
+                        return;
+                        }
+                        // проверка на упоминание @username
+                        if (/^@[A-Za-z0-9_]+$/.test(part)) {
+                            tokens.push({ type: 'element', element: createMention(part) });
+                            return;
+                        }
+                        // кастомный эмодзи
+                        if (customEmotes[part]) {
+                            const el = createCustomEmote(part);
+                            tokens.push({ type: 'emote', element: el, isZero: el.dataset.zero === '1' });
+                        } else {
+                            tokens.push({ type: 'text', text: part });
+                        }
                     }
                 });
             }
         });
 
-        // формируем финальные узлы
         const out = [];
         tokens.forEach(tok => {
             if (tok.type === 'emote' && tok.isZero) {
-                // ищем назад последний эмодзи или стек
                 let j = out.length - 1;
-                while (j >= 0 &&
-                      out[j].nodeType === 3 &&
-                      /^\s*$/.test(out[j].textContent)) {
-                    j--;
-                }
+                while (j >= 0 && out[j].nodeType === 3 && /^\s*$/.test(out[j].textContent)) j--;
                 if (j >= 0) {
                     const prev = out[j];
-                    if (
-                        prev.nodeType === 1 &&
-                        (prev.classList.contains('emote') ||
-                         prev.classList.contains('emote-stack'))
-                    ) {
+                    if (prev.nodeType === 1 && (prev.classList.contains('emote') || prev.classList.contains('emote-stack'))) {
                         out.splice(j, 1);
-                        let baseElems;
-                        if (prev.classList.contains('emote-stack')) {
-                            baseElems = Array.from(prev.children).map(el => ({ element: el }));
-                        } else {
-                            baseElems = [{ element: prev }];
-                        }
-                        const newStack = baseElems.concat({ element: tok.element });
-                        out.splice(j, 0, renderEmoteStack(newStack));
+                        const base = prev.classList.contains('emote-stack')
+                            ? Array.from(prev.children).map(el => ({ element: el }))
+                            : [{ element: prev }];
+                        out.splice(j, 0, renderEmoteStack([...base, { element: tok.element }]));
                         return;
                     }
                 }
             }
-            if (tok.type === 'emote') {
-                out.push(tok.element);
-            } else {
-                // text or space
-                out.push(document.createTextNode(tok.text));
-            }
+            if (tok.type === 'element') out.push(tok.element);
+            else if (tok.type === 'emote') out.push(tok.element);
+            else out.push(document.createTextNode(tok.text));
         });
 
-        // собираем в DOM
-        const content = document.createElement('span');
-        content.className = 'message-content';
-        out.forEach(node => content.appendChild(node));
-        div.appendChild(content);
+        const contentDiv = document.createElement('span');
+        contentDiv.className = 'message-content';
+        out.forEach(node => contentDiv.appendChild(node));
+        msgContainer.appendChild(contentDiv);
+
         return div;
     }
 
-    // 10. VideoPlayer + автоскролл
+    // —————————————————————————————————————————
+    // 10. Инициализация и автоскролл
+    // —————————————————————————————————————————
     const chatEl = document.getElementById('chat-messages');
     const autoBtn = document.getElementById('auto-scroll-button');
     let idx = 0, curTime = 0, autoOn = true, playerInited = false, player;
@@ -248,7 +309,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     }
 
-    function update(time, seek=false) {
+    function update(time, seek = false) {
         if (seek) {
             chatEl.innerHTML = '';
             idx = sortedComments.findIndex(x => x.content_offset_seconds > time);
@@ -257,10 +318,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                 chatEl.appendChild(processMessage(sortedComments[i]));
             }
         } else {
-            while (
-                idx < sortedComments.length &&
-                sortedComments[idx].content_offset_seconds <= time
-            ) {
+            while (idx < sortedComments.length && sortedComments[idx].content_offset_seconds <= time) {
                 chatEl.appendChild(processMessage(sortedComments[idx]));
                 idx++;
             }
@@ -290,28 +348,23 @@ document.addEventListener('DOMContentLoaded', async function() {
             }
             curTime = t;
         });
-        player.on(VK.VideoPlayer.Events.ERROR, e => console.error(e));
-    }
-
-    function seekTo(sec) {
-        if (!playerInited) return;
-        player.seek(sec);
-        curTime = sec;
-        autoOn = true;
-        update(sec, true);
-        manageScroll();
     }
 
     initVK();
     chatEl.addEventListener('scroll', () => {
-        autoOn =
-            chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 1;
+        autoOn = chatEl.scrollHeight - chatEl.scrollTop - chatEl.clientHeight < 1;
         manageScroll();
     });
     chatEl.addEventListener('click', e => {
         if (e.target.classList.contains('timestamp')) {
             const t = parseFloat(e.target.dataset.time);
-            if (!isNaN(t)) seekTo(t);
+            if (!isNaN(t) && playerInited) {
+                player.seek(t);
+                curTime = t;
+                autoOn = true;
+                update(t, true);
+                manageScroll();
+            }
         }
     });
     autoBtn.addEventListener('click', () => {
